@@ -1,10 +1,10 @@
 /* viewer.js — pdf.js document loading and page rendering. */
 
-import * as pdfjs from '../vendor/pdfjs/pdf.min.mjs';
+import * as pdfjs from '../vendor/pdfjs/pdf.min.js';
 import { state } from './state.js';
 
 const V = '../vendor/pdfjs/';
-pdfjs.GlobalWorkerOptions.workerSrc = new URL(V + 'pdf.worker.min.mjs', import.meta.url).href;
+pdfjs.GlobalWorkerOptions.workerSrc = new URL(V + 'pdf.worker.min.js', import.meta.url).href;
 
 const assetUrl = p => new URL(V + p, import.meta.url).href;
 

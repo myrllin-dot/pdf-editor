@@ -16,7 +16,7 @@
  * chains `.on('data').on('end').on('error')` synchronously after the call.
  */
 
-import * as fontkit from '../vendor/fontkit/fontkit.bundle.mjs';
+import * as fontkit from '../vendor/fontkit/fontkit.bundle.js';
 
 function withEncodeStream(subset) {
   if (typeof subset.encodeStream === 'function') return subset;

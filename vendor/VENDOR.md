@@ -5,12 +5,12 @@ host with no build step and no CDN, and keep working offline.
 
 | Path | Package | Version | Notes |
 |---|---|---|---|
-| `pdfjs/pdf.min.mjs`, `pdfjs/pdf.worker.min.mjs` | `pdfjs-dist` | 6.5.438 | page rendering + text extraction |
+| `pdfjs/pdf.min.js`, `pdfjs/pdf.worker.min.js` | `pdfjs-dist` | 6.5.438 | page rendering + text extraction |
 | `pdfjs/cmaps/` | `pdfjs-dist` | 6.5.438 | needed to read CJK-encoded PDFs |
 | `pdfjs/standard_fonts/` | `pdfjs-dist` | 6.5.438 | the standard 14 fonts when a PDF doesn't embed them |
 | `pdfjs/wasm/`, `pdfjs/iccs/` | `pdfjs-dist` | 6.5.438 | JBIG2/JPEG2000 decoding + colour profiles (scanned scores) |
 | `pdf-lib/pdf-lib.esm.min.js` | `pdf-lib` | 1.17.1 | writes the edited PDF |
-| `fontkit/fontkit.bundle.mjs` | `fontkit` | 3.0.0 | **bundled**, see below |
+| `fontkit/fontkit.bundle.js` | `fontkit` | 3.0.0 | **bundled**, see below |
 | `fonts/NotoSansTC_400Regular.ttf` | `@expo-google-fonts/noto-sans-tc` | 0.4.4 | lazy-loaded, subset-embedded for Chinese text |
 
 ## Why fontkit 3 and not `@pdf-lib/fontkit`
@@ -33,7 +33,7 @@ Upstream `fontkit@3` subsets the same font correctly. Two consequences:
    ```bash
    echo "export * from 'fontkit';" > fk-entry.mjs
    npx esbuild fk-entry.mjs --bundle --format=esm --platform=browser \
-     --target=es2020 --minify --outfile=vendor/fontkit/fontkit.bundle.mjs
+     --target=es2020 --minify --outfile=vendor/fontkit/fontkit.bundle.js
    ```
 
    Licences for everything bundled in are in `fontkit/NOTICE.txt`.
@@ -48,12 +48,22 @@ This combination is smaller than the broken one it replaced (380 KB, versus
 `test/export.test.mjs` renders a PDF containing every annotation type and
 asserts the glyphs actually make it in, so a regression here fails loudly.
 
+## Why `.js` and not `.mjs`
+
+The pdf.js and fontkit bundles are ES modules but are committed with a `.js`
+extension on purpose. GitHub Pages' `Content-Type` for `.mjs` is not something
+to rely on, and a browser refuses a module script served as anything other than
+a JavaScript MIME type — which would break the whole app on deploy while
+working perfectly from a local server. `.js` is served as `text/javascript`
+everywhere. pdf.js builds its worker with an explicit `{ type: "module" }`
+rather than sniffing the extension, so nothing depends on the `.mjs` name.
+
 ## Refreshing a library
 
 ```bash
 npm pack pdfjs-dist@<ver>          # etc.
 tar xzf <pkg>.tgz
-cp package/build/pdf.min.mjs vendor/pdfjs/
+cp package/build/pdf.min.mjs vendor/pdfjs/pdf.min.js
 ```
 Then re-apply the fontkit patch above if you bump `@pdf-lib/fontkit`, and
 re-run `npm test`.
