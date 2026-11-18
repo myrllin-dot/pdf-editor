@@ -51,10 +51,26 @@ const annots = [
     color:'#555555', rotate:45, opacity:0.18 },
 ];
 
-const fetchCjk = () => readFile(FONT).then(b => b.buffer.slice(b.byteOffset, b.byteOffset + b.byteLength));
+// buildPdf's font lookups are injectable precisely so this test can run with
+// no DOM and no font registry.
+const FONTS = {
+  sans:  { key:'sans',  kind:'builtin', std:'Helvetica',  stdBold:'HelveticaBold' },
+  serif: { key:'serif', kind:'builtin', std:'TimesRoman', stdBold:'TimesRomanBold' },
+  mono:  { key:'mono',  kind:'builtin', std:'Courier',    stdBold:'CourierBold' },
+  cjk:   { key:'cjk',   kind:'bundled', label:'Noto Sans TC', cjk:true },
+};
+const getFontInfo = k => FONTS[k] || FONTS.sans;
+const getFontBytes = async () => {
+  const b = await readFile(FONT);
+  return b.buffer.slice(b.byteOffset, b.byteOffset + b.byteLength);
+};
+const defaultCjkKey = () => 'cjk';
 
 const t0 = Date.now();
-const res = await buildPdf(src, annots, { fetchCjk, onProgress: m => process.stdout.write(`  · ${m}\n`) });
+const res = await buildPdf(src, annots, {
+  getFontInfo, getFontBytes, defaultCjkKey,
+  onProgress: m => process.stdout.write(`  · ${m}\n`),
+});
 await writeFile(`${OUT}/edited.pdf`, res.bytes);
 
 console.log(`\nbuildPdf: ${Date.now()-t0}ms`);

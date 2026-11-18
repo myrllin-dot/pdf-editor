@@ -12,6 +12,7 @@ host with no build step and no CDN, and keep working offline.
 | `pdf-lib/pdf-lib.esm.min.js` | `pdf-lib` | 1.17.1 | writes the edited PDF |
 | `fontkit/fontkit.bundle.js` | `fontkit` | 3.0.0 | **bundled**, see below |
 | `fonts/NotoSansTC_400Regular.ttf` | `@expo-google-fonts/noto-sans-tc` | 0.4.4 | lazy-loaded, subset-embedded for Chinese text |
+| `fonts/jf-openhuninn-2.1.ttf` | jf open 粉圓 | 2.1 | justfont, SIL OFL 1.1 — see the .LICENSE.txt beside it |
 | `tesseract/tesseract.esm.min.js`, `worker.min.js` | `tesseract.js` | 7.0.0 | OCR for scanned pages |
 | `tesseract/core/*.wasm.js` | `tesseract.js-core` | 7.0.0 | **must match tesseract.js's major**, see below |
 | `tesseract/lang/*.traineddata.gz` | `@tesseract.js-data/{eng,chi_tra}` | 1.0.0 | `4.0.0_best_int` models |
@@ -50,6 +51,23 @@ This combination is smaller than the broken one it replaced (380 KB, versus
 
 `test/export.test.mjs` renders a PDF containing every annotation type and
 asserts the glyphs actually make it in, so a regression here fails loudly.
+
+## Adding fonts
+
+`fonts/fonts.json` is the registry; `js/fonts.js` reads it. Dropping a file in
+this directory and adding an entry is the whole procedure — see 加自己的字體
+in the README.
+
+Only put a font here if its licence permits redistribution, because this
+directory is published. OFL 1.1 clause 2 allows bundling with software as long
+as each copy carries the copyright notice and the licence, and accepts "easily
+viewed metadata" as a way of doing it — the committed `.ttf` files are the
+upstream releases with their `name` tables intact, so they satisfy that, and a
+summary `.LICENSE.txt` sits beside each one.
+
+A font that may be used but not redistributed must go through the app's
+"從這台電腦加入字體" instead, which stores it in the user's browser (IndexedDB)
+and never touches the repo.
 
 ## Tesseract: two things that will bite
 

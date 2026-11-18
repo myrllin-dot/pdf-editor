@@ -6,17 +6,18 @@
 import { state, findAnnot } from './state.js';
 import { pdfToScreen, pdfBoxToScreen } from './viewer.js';
 import { LINE_HEIGHT, headLenPx, ARROW_BACK, ARROW_SPREAD } from './geom.js';
+import { cssFamily } from './fonts.js';
 
+/** Kept for callers that still import it; the registry is the real source. */
 export const CANVAS_FONTS = {
   sans: 'Helvetica, Arial, sans-serif',
   serif: '"Times New Roman", Times, serif',
   mono: '"Courier New", Courier, monospace',
-  cjk: '"Noto Sans TC", "PingFang TC", "Microsoft JhengHei", sans-serif',
 };
 
 export function cssFont(a, scale) {
   const px = a.size * scale;
-  return `${a.bold ? '700 ' : ''}${px}px ${CANVAS_FONTS[a.fontKey] || CANVAS_FONTS.sans}`;
+  return `${a.bold ? '700 ' : ''}${px}px ${cssFamily(a.fontKey)}`;
 }
 
 const rgba = (hex, alpha = 1) => {

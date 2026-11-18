@@ -63,6 +63,52 @@ OCR 的定位是「把文字和位置先填好給你改」，**不是可靠的�
 第一次執行會下載約 6 MB 的辨識引擎加語言資料（實測含下載約 40 秒），
 之後瀏覽器會快取，同一份文件後續每頁約 1–5 秒。
 
+## 加自己的字體
+
+字體分兩種放法，**依授權決定**，不要放錯。
+
+### 1. 內建字體（會進 repo，所有人都看得到）
+
+適用：可以自由散布的字體（OFL、Apache 等）。
+
+```
+1. 把 .ttf / .otf 放進 vendor/fonts/
+2. 打開 vendor/fonts/fonts.json，加一筆：
+
+   { "key": "huninn", "label": "粉圓體 jf open 粉圓",
+     "file": "jf-openhuninn-2.1.ttf", "cjk": true }
+
+3. commit、push。沒有其他地方要改。
+```
+
+| 欄位 | 說明 |
+|---|---|
+| `key` | 唯一代號，會存進標記資料裡，**之後不要改名** |
+| `label` | 字體下拉選單顯示的名稱 |
+| `file` | `vendor/fonts/` 裡的檔名 |
+| `cjk` | 有中文字就設 `true`。標準字體編碼不了的文字會自動改用其中一個 `cjk` 字體 |
+
+目前內建：Noto Sans TC、jf open 粉圓（justfont，OFL 1.1）。
+輸出時字體會**子集化**，所以加一行粉圓體大概只增加幾 KB，不是整包 4.9 MB。
+
+### 2. 本機字體（只留在你的瀏覽器）
+
+適用：**你有授權用、但不能散布的字體** — 商用字體、品牌字體、客戶指定的字體。
+
+字體下拉選單 → **「＋ 從這台電腦加入字體…」** → 選檔案。
+
+存在瀏覽器的 IndexedDB 裡，重新整理後仍然在。不會上傳、不會進 repo、別人打開這個網站看不到。
+輸出的 PDF 會嵌入它（這是 PDF 一定要做的事），所以**散布那份 PDF 前請確認你的字體授權允許嵌入**。
+
+> ⚠️ 你 `Downloads/Typeface` 裡的 Canva Sans 屬於第 2 類。
+> 它的授權寫明 *"To be utilised by Canva Pty Ltd and associated partners ONLY on brand projects"*，
+> 放進公開 repo 會違反授權。請用「從這台電腦加入字體」。
+
+### 字體與粗體
+
+每個字體檔只載一個字重。勾「粗體」時，標準字體會用真正的 Bold 字檔；
+內建／本機字體則是把文字畫兩次做出假粗體。要真正的 Bold 字重，就把 Bold 檔案當成另一個字體加進去。
+
 ## 已知限制（請先讀這段）
 
 - **「改字」是遮蓋重打，不是真的刪除。** 原本的文字仍留在 PDF 內部，`pdftotext`、搜尋、複製貼上都還抓得到。
@@ -99,6 +145,7 @@ js/
   overlay.js        把標記畫到螢幕、hit-test、搬移
   tools.js          指標操作：選取／改字／加字／手繪／箭頭／螢光
   stamps.js         批次頁碼／頁尾／浮水印
+  fonts.js          字體登錄表：標準 14 種 / 內建 / 本機三類來源
   ocr.js            Tesseract 文字辨識，輸出與原生文字圖層同形狀的資料
   thumbs.js         頁面縮圖列（lazy render + 標記合成）
   export.js         pdf-lib 壓平輸出、字體解析
@@ -110,7 +157,7 @@ test/               見 test/README.md
 
 沒有 build step、沒有 npm 相依、沒有 CDN。clone 下來用任何靜態伺服器開即可。
 
-repo 大約 30 MB，其中 16 MB 是 OCR 引擎與語言資料、7 MB 是中文字體。
+repo 大約 35 MB，其中 16 MB 是 OCR 引擎與語言資料、12 MB 是兩套中文字體。
 這些都是**用到才載**——不碰 OCR 就不會下載那 6 MB，不打中文就不會下載字體。
 
 ---
@@ -147,6 +194,11 @@ glyphs come from standard fonts or Noto Sans TC, not the document's own
 embedded face. OCR gives you a *starting point to correct*, not a reliable
 transcription — and pick a single language, because loading Chinese and
 English together measurably wrecks Chinese accuracy.
+
+To add a font: redistributable ones go in `vendor/fonts/` plus an entry in
+`vendor/fonts/fonts.json`; anything you're licensed to use but not to
+redistribute goes in through 字體 → 從這台電腦加入字體, which keeps it in your
+browser and out of the repo. See 加自己的字體 above.
 
 ## 授權
 

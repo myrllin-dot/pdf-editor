@@ -1,0 +1,36 @@
+jf open 粉圓 (jf-openhuninn) 2.1
+=====================================================================
+
+[Kosugi Maru]
+Copyright (c) 2010 MOTOYA CO.,LTD.            
+
+[Varela Round]
+Copyright (x) 2011-2016 The Varela Round Project Authors (https://github.com/alefalefalef/Varela-Round-Hebrew/), with Reserved Font Names 'Varela' and 'Varela Round'.            
+
+[jf open huninn]
+Copyright (c) 2020-2024 The jf open huninn font is redistributed by justfont Co., Ltd., with Reserved Font Names 'open huninn' and 'huninn' under SIL Open Font License. The Hanzi part of this project was derived from Kosugi Maru under Apache-2.0 (https://www.apache.org/licenses/LICENSE-2.0).
+
+Family      : jf-openhuninn-2.1
+Manufacturer: justfont Co., Ltd.
+Licence     : SIL Open Font License, Version 1.1
+Licence URL : http://scripts.sil.org/OFL
+
+The licence statement embedded in the font's own name table reads:
+
+This Font Software is licensed under the SIL Open Font License, Version 1.1. This Font Software is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the SIL Open Font License for the specific language, permissions and limitations governing your use of this Font Software.
+
+---------------------------------------------------------------------
+Note on this copy
+---------------------------------------------------------------------
+
+OFL 1.1 clause 2 permits redistribution bundled with software provided
+each copy carries the copyright notice and the licence, and states that
+these "can be standalone text files, readable headers, or easily viewed
+metadata". The .ttf in this directory is byte-for-byte the upstream
+release with its name table intact, so it carries both.
+
+This file is a convenience summary, NOT the licence itself. For the full
+official text see https://openfontlicense.org/ — download OFL.txt from
+there (or from justfont's own release) rather than retyping it.
+
+Upstream: https://justfont.com/huninn

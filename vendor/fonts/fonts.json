@@ -1,0 +1,31 @@
+{
+  "_comment": [
+    "Fonts bundled with the app and offered to everyone who opens it.",
+    "",
+    "TO ADD ONE: put the .ttf or .otf next to this file and add an entry below.",
+    "  key   unique id, also used in saved annotations. Don't rename it later.",
+    "  label what shows in the font dropdown.",
+    "  file  filename in this directory.",
+    "  cjk   true if it covers Chinese/Japanese/Korean. One cjk font is used",
+    "        automatically when text can't be encoded by the standard fonts.",
+    "",
+    "ONLY put a font here if its licence permits redistribution — this folder",
+    "is committed to a public repo. A font you may use but not redistribute",
+    "(most commercial and brand fonts) goes in via 字體 -> 從這台電腦加入字體,",
+    "which keeps it in your browser only."
+  ],
+  "fonts": [
+    {
+      "key": "cjk",
+      "label": "中文 Noto Sans TC",
+      "file": "NotoSansTC_400Regular.ttf",
+      "cjk": true
+    },
+    {
+      "key": "huninn",
+      "label": "粉圓體 jf open 粉圓",
+      "file": "jf-openhuninn-2.1.ttf",
+      "cjk": true
+    }
+  ]
+}

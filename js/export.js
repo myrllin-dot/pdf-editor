@@ -9,62 +9,57 @@ import {
 } from '../vendor/pdf-lib/pdf-lib.esm.min.js';
 import fontkit from './fontkit-compat.js';
 import { LINE_HEIGHT, headLenPx, ARROW_BACK, ARROW_SPREAD, hexToRgb01, needsCJK } from './geom.js';
-
-export const CJK_FONT_URL = new URL('../vendor/fonts/NotoSansTC_400Regular.ttf', import.meta.url).href;
+import * as fontRegistry from './fonts.js';
 
 const hexRgb = hex => rgb(...hexToRgb01(hex));
 export { needsCJK };
 
-/* ---------- CJK font bytes, fetched once and cached ---------- */
-let cjkBytesPromise = null;
-export function loadCjkBytes(url = CJK_FONT_URL) {
-  if (!cjkBytesPromise) {
-    cjkBytesPromise = fetch(url)
-      .then(r => {
-        if (!r.ok) throw new Error(`HTTP ${r.status}`);
-        return r.arrayBuffer();
-      })
-      .catch(err => {
-        cjkBytesPromise = null; // allow a retry
-        throw new Error(`無法載入中文字體 (${err.message})`);
-      });
-  }
-  return cjkBytesPromise;
-}
-
 /**
- * Lazily resolves pdf-lib font objects, embedding only what is actually used.
- * `fetchCjk` is injectable so this module can be unit-tested outside a browser.
+ * Resolves a font key to a pdf-lib font, embedding only what is actually used.
+ *
+ * The lookups are injectable so this module can be exercised headlessly: in a
+ * browser they come from the font registry, in tests from plain fixtures.
  */
-function makeFontResolver(doc, fetchCjk) {
+function makeFontResolver(doc, opts) {
+  const info = opts.getFontInfo || fontRegistry.getFont;
+  const bytesFor = opts.getFontBytes || fontRegistry.fontBytes;
+  const cjkDefault = opts.defaultCjkKey || fontRegistry.defaultCjkKey;
   const cache = new Map();
-  const std = {
-    'sans:0': StandardFonts.Helvetica,
-    'sans:1': StandardFonts.HelveticaBold,
-    'serif:0': StandardFonts.TimesRoman,
-    'serif:1': StandardFonts.TimesRomanBold,
-    'mono:0': StandardFonts.Courier,
-    'mono:1': StandardFonts.CourierBold,
-  };
 
   return async function resolve(fontKey, bold, text) {
-    // Auto-upgrade: non-Latin-1 text cannot be encoded by the standard 14.
-    const key = (fontKey === 'cjk' || needsCJK(text)) ? 'cjk' : fontKey;
-    const id = `${key}:${bold ? 1 : 0}`;
-    if (cache.has(id)) return { font: cache.get(id), fauxBold: key === 'cjk' && bold, upgraded: key !== fontKey };
+    let key = fontKey;
+    let upgraded = false;
 
-    let font;
-    if (key === 'cjk') {
-      doc.registerFontkit(fontkit);
-      const bytes = await fetchCjk();
-      font = await doc.embedFont(bytes, { subset: true });
-      cache.set('cjk:0', font);
-      cache.set('cjk:1', font); // one weight; bold is faked by double-draw
-    } else {
-      font = await doc.embedFont(std[id] || StandardFonts.Helvetica);
-      cache.set(id, font);
+    // The standard 14 cannot encode anything outside Latin-1, so text that
+    // needs more is moved onto an embedded face automatically.
+    if (info(key).kind === 'builtin' && needsCJK(text)) {
+      const fallback = cjkDefault();
+      if (!fallback) {
+        throw new Error('這段文字含有標準字體無法編碼的字元，但找不到可用的中文字體。');
+      }
+      key = fallback;
+      upgraded = true;
     }
-    return { font: cache.get(id), fauxBold: key === 'cjk' && bold, upgraded: key !== fontKey };
+
+    const desc = info(key);
+    const embedded = desc.kind !== 'builtin';
+    const id = `${key}:${bold ? 1 : 0}`;
+
+    if (!cache.has(id)) {
+      if (embedded) {
+        doc.registerFontkit(fontkit);
+        const bytes = await bytesFor(key);
+        const font = await doc.embedFont(bytes, { subset: true });
+        // One weight per file; bold is faked by drawing twice.
+        cache.set(`${key}:0`, font);
+        cache.set(`${key}:1`, font);
+      } else {
+        const name = bold ? desc.stdBold : desc.std;
+        cache.set(id, await doc.embedFont(StandardFonts[name] || StandardFonts.Helvetica));
+      }
+    }
+
+    return { font: cache.get(id), fauxBold: embedded && bold, upgraded, embedded };
   };
 }
 
@@ -75,16 +70,15 @@ function makeFontResolver(doc, fetchCjk) {
 /**
  * @param {Uint8Array} originalBytes pristine source PDF
  * @param {Array} annots             annotations, each with .page (1-based)
- * @param {object} opts              { fetchCjk, onProgress }
+ * @param {object} opts              { onProgress, getFontInfo, getFontBytes, defaultCjkKey }
  * @returns {Promise<{bytes:Uint8Array, usedCjk:boolean, upgradedCount:number}>}
  */
 export async function buildPdf(originalBytes, annots, opts = {}) {
-  const fetchCjk = opts.fetchCjk || loadCjkBytes;
   const progress = opts.onProgress || (() => {});
 
   progress('讀取 PDF…');
   const doc = await PDFDocument.load(originalBytes, { ignoreEncryption: true });
-  const resolve = makeFontResolver(doc, fetchCjk);
+  const resolve = makeFontResolver(doc, opts);
   const pages = doc.getPages();
 
   let usedCjk = false, upgradedCount = 0;
@@ -194,9 +188,9 @@ export async function buildPdf(originalBytes, annots, opts = {}) {
         }
 
         case 'text': {
-          const { font, fauxBold, upgraded } = await resolve(a.fontKey, a.bold, a.text);
+          const { font, fauxBold, upgraded, embedded } = await resolve(a.fontKey, a.bold, a.text);
           if (upgraded) upgradedCount++;
-          if (font.name && /Noto/i.test(font.name)) usedCjk = true;
+          if (embedded) usedCjk = true;
 
           const col = hexRgb(a.color);
           const lines = String(a.text).split('\n');

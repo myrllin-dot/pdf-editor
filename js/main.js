@@ -10,6 +10,7 @@ import { applyStamp } from './stamps.js';
 import { ocrPage, meanConfidence, terminate as terminateOcr } from './ocr.js';
 import { buildThumbs, setActiveThumb, refreshThumb, destroyThumbs, thumbsReady } from './thumbs.js';
 import { refreshTextItems } from './viewer.js';
+import { initFonts, listFonts, getFont, addLocalFont, removeLocalFont } from './fonts.js';
 import { buildPdf } from './export.js';
 
 const $ = id => document.getElementById(id);
@@ -250,6 +251,37 @@ function setTool(name) {
   });
 }
 
+function populateFonts() {
+  const sel = $('font-select');
+  sel.innerHTML = '';
+  const groups = { builtin: '標準字體', bundled: '內建字體', local: '本機字體' };
+  for (const kind of ['builtin', 'bundled', 'local']) {
+    const fonts = listFonts().filter(f => f.kind === kind);
+    if (!fonts.length) continue;
+    const g = document.createElement('optgroup');
+    g.label = groups[kind];
+    for (const f of fonts) {
+      const o = document.createElement('option');
+      o.value = f.key;
+      o.textContent = f.label;
+      g.appendChild(o);
+    }
+    sel.appendChild(g);
+  }
+  const add = document.createElement('option');
+  add.value = '__add__';
+  add.textContent = '＋ 從這台電腦加入字體…';
+  sel.appendChild(add);
+
+  if (!listFonts().some(f => f.key === state.fontKey)) state.fontKey = 'sans';
+  sel.value = state.fontKey;
+  syncFontControls();
+}
+
+function syncFontControls() {
+  $('font-remove').hidden = getFont(state.fontKey).kind !== 'local';
+}
+
 function buildSwatches() {
   const box = $('swatches');
   SWATCHES.forEach(c => {
@@ -377,7 +409,42 @@ function wire() {
   $('size-range').addEventListener('input', e => {
     state.fontSize = parseFloat(e.target.value); $('size-out').value = e.target.value;
   });
-  $('font-select').addEventListener('change', e => { state.fontKey = e.target.value; });
+  $('font-select').addEventListener('change', e => {
+    if (e.target.value === '__add__') {
+      e.target.value = state.fontKey;      // don't leave the picker selected
+      $('font-file').click();
+      return;
+    }
+    state.fontKey = e.target.value;
+    syncFontControls();
+    redraw();
+  });
+  $('font-file').addEventListener('change', async e => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    try {
+      const { key, label, cjk, persisted } = await addLocalFont(file);
+      state.fontKey = key;
+      populateFonts();
+      redraw();
+      toast(persisted
+        ? `已加入「${label}」${cjk ? '（含中文字）' : ''}。字體只存在這台瀏覽器裡，不會上傳也不會進 repo。`
+        : `已加入「${label}」，但這個瀏覽器不允許儲存，重新整理後需要再加一次。`);
+    } catch (err) {
+      toast(`無法加入字體：${err.message}`, true);
+    }
+  });
+  $('font-remove').addEventListener('click', async () => {
+    const key = state.fontKey;
+    const label = getFont(key).label;
+    if (await removeLocalFont(key)) {
+      state.fontKey = 'sans';
+      populateFonts();
+      redraw();
+      toast(`已移除「${label}」。用到它的文字會改用預設字體。`);
+    }
+  });
   $('font-bold').addEventListener('change', e => { state.bold = e.target.checked; });
   $('alpha-range').addEventListener('input', e => {
     state.highlightAlpha = parseFloat(e.target.value) / 100;
@@ -465,6 +532,10 @@ buildSwatches();
 wire();
 setTool('select');
 setEnabled(false);
+
+// Faces load lazily; repaint when one arrives so the preview catches up.
+await initFonts({ onFaceReady: () => redraw() });
+populateFonts();
 
 tools = installTools({
   canvas: el.overlay,

@@ -86,12 +86,9 @@
 
     <div class="opt-row" data-for="textbox textedit">
       <label>字體</label>
-      <select id="font-select">
-        <option value="sans">無襯線 Helvetica</option>
-        <option value="serif">襯線 Times</option>
-        <option value="mono">等寬 Courier</option>
-        <option value="cjk">中文 Noto Sans TC</option>
-      </select>
+      <select id="font-select"></select>
+      <input type="file" id="font-file" accept=".ttf,.otf,font/ttf,font/otf" hidden>
+      <button type="button" id="font-remove" class="linkbtn" hidden>移除這個本機字體</button>
       <label class="chk"><input type="checkbox" id="font-bold"> 粗體</label>
     </div>
 
