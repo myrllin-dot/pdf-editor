@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>PDF Editor</title>
+<link rel="stylesheet" href="css/style.css">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><text y='13' font-size='13'>&#9999;</text></svg>">
+</head>
+<body>
+
+<header id="topbar">
+  <div class="brand">PDF&nbsp;Editor</div>
+
+  <div class="group">
+    <button id="btn-open" class="btn primary">開啟 PDF</button>
+    <input type="file" id="file-input" accept="application/pdf" hidden>
+    <button id="btn-save" class="btn" disabled>另存 PDF</button>
+  </div>
+
+  <div class="group">
+    <button id="btn-undo" class="btn icon" title="復原 (Ctrl+Z)" disabled>&#8630;</button>
+    <button id="btn-redo" class="btn icon" title="重做 (Ctrl+Shift+Z)" disabled>&#8631;</button>
+  </div>
+
+  <div class="group">
+    <button id="btn-prev" class="btn icon" title="上一頁" disabled>&#8249;</button>
+    <span id="page-label" class="readout">— / —</span>
+    <button id="btn-next" class="btn icon" title="下一頁" disabled>&#8250;</button>
+  </div>
+
+  <div class="group">
+    <button id="btn-zoom-out" class="btn icon" title="縮小" disabled>&minus;</button>
+    <span id="zoom-label" class="readout">100%</span>
+    <button id="btn-zoom-in" class="btn icon" title="放大" disabled>+</button>
+    <button id="btn-zoom-fit" class="btn" title="符合寬度" disabled>適寬</button>
+  </div>
+
+  <div class="group right">
+    <button id="btn-stamps" class="btn" disabled>批次標記…</button>
+  </div>
+</header>
+
+<div id="body">
+
+  <nav id="toolbar" aria-label="工具">
+    <button class="tool active" data-tool="select" title="選取／移動 (V)"><span>&#9655;</span><em>選取</em></button>
+    <button class="tool" data-tool="textedit" title="編輯原有文字 (E)"><span>T&#8599;</span><em>改字</em></button>
+    <button class="tool" data-tool="textbox" title="插入文字 (T)"><span>T</span><em>加字</em></button>
+    <button class="tool" data-tool="pen" title="手繪 (P)"><span>&#9998;</span><em>手繪</em></button>
+    <button class="tool" data-tool="arrow" title="箭頭 (A)"><span>&#8599;</span><em>箭頭</em></button>
+    <button class="tool" data-tool="highlight" title="螢光筆 (H)"><span>&#9644;</span><em>螢光</em></button>
+    <div class="spacer"></div>
+    <button class="tool danger" id="btn-delete" title="刪除選取 (Del)"><span>&#128465;</span><em>刪除</em></button>
+  </nav>
+
+  <aside id="options" aria-label="工具選項">
+    <div class="opt-row">
+      <label>顏色</label>
+      <div id="swatches"></div>
+      <input type="color" id="color-custom" value="#d81b60" title="自訂顏色">
+    </div>
+
+    <div class="opt-row" data-for="pen arrow">
+      <label>粗細 <output id="width-out">2</output></label>
+      <input type="range" id="width-range" min="0.5" max="12" step="0.5" value="2">
+    </div>
+
+    <div class="opt-row" data-for="textbox textedit">
+      <label>字級 <output id="size-out">12</output></label>
+      <input type="range" id="size-range" min="5" max="72" step="0.5" value="12">
+    </div>
+
+    <div class="opt-row" data-for="textbox textedit">
+      <label>字體</label>
+      <select id="font-select">
+        <option value="sans">無襯線 Helvetica</option>
+        <option value="serif">襯線 Times</option>
+        <option value="mono">等寬 Courier</option>
+        <option value="cjk">中文 Noto Sans TC</option>
+      </select>
+      <label class="chk"><input type="checkbox" id="font-bold"> 粗體</label>
+    </div>
+
+    <div class="opt-row" data-for="highlight">
+      <label>不透明度 <output id="alpha-out">35%</output></label>
+      <input type="range" id="alpha-range" min="10" max="80" step="5" value="35">
+    </div>
+
+    <div class="hint" id="tool-hint"></div>
+  </aside>
+
+  <main id="stage">
+    <div id="dropzone">
+      <div class="dz-inner">
+        <div class="dz-icon">&#128196;</div>
+        <h2>把 PDF 拖進來</h2>
+        <p>或按左上角「開啟 PDF」。檔案只留在這台裝置的瀏覽器裡，不會上傳。</p>
+      </div>
+    </div>
+    <div id="canvas-wrap" hidden>
+      <div id="page-holder">
+        <canvas id="page-canvas"></canvas>
+        <canvas id="overlay-canvas"></canvas>
+        <textarea id="inline-editor" spellcheck="false" hidden></textarea>
+      </div>
+    </div>
+  </main>
+</div>
+
+<!-- 批次標記 -->
+<div id="stamp-modal" class="modal" hidden>
+  <div class="modal-card">
+    <h3>批次標記</h3>
+
+    <div class="tabs">
+      <button class="tab active" data-tab="pagenum">頁碼</button>
+      <button class="tab" data-tab="footer">頁尾</button>
+      <button class="tab" data-tab="watermark">浮水印</button>
+    </div>
+
+    <section class="tabpane" data-pane="pagenum">
+      <div class="field"><label>格式</label>
+        <input type="text" id="pn-format" value="{n}" placeholder="{n} / {total}">
+        <small>{n} = 頁碼，{total} = 總頁數</small>
+      </div>
+      <div class="field two"><label>起始號</label><input type="number" id="pn-start" value="1">
+        <label>字級</label><input type="number" id="pn-size" value="10" min="4" max="48"></div>
+      <div class="field"><label>位置</label>
+        <select id="pn-pos">
+          <option value="bc">下方居中</option><option value="br">右下</option><option value="bl">左下</option>
+          <option value="tc">上方居中</option><option value="tr">右上</option><option value="tl">左上</option>
+        </select>
+      </div>
+    </section>
+
+    <section class="tabpane" data-pane="footer" hidden>
+      <div class="field"><label>頁尾文字</label>
+        <input type="text" id="ft-text" placeholder="長笛玩家工作室 Flute Gamer Studio">
+      </div>
+      <div class="field two"><label>字級</label><input type="number" id="ft-size" value="8" min="4" max="48">
+        <label>位置</label>
+        <select id="ft-pos"><option value="bc">下方居中</option><option value="bl">左下</option><option value="br">右下</option></select>
+      </div>
+    </section>
+
+    <section class="tabpane" data-pane="watermark" hidden>
+      <div class="field"><label>浮水印文字</label>
+        <input type="text" id="wm-text" placeholder="樣本 SAMPLE">
+      </div>
+      <div class="field two"><label>字級</label><input type="number" id="wm-size" value="60" min="8" max="300">
+        <label>角度</label><input type="number" id="wm-angle" value="45" min="-90" max="90"></div>
+      <div class="field"><label>不透明度 <output id="wm-alpha-out">12%</output></label>
+        <input type="range" id="wm-alpha" min="3" max="60" step="1" value="12"></div>
+    </section>
+
+    <div class="field two common">
+      <label>頁面範圍</label><input type="text" id="st-range" value="all" placeholder="all 或 1-5,8">
+      <label>顏色</label><input type="color" id="st-color" value="#555555">
+    </div>
+    <div class="field common">
+      <label class="chk"><input type="checkbox" id="st-cjk"> 含中文字（嵌入中文字體）</label>
+    </div>
+
+    <div class="modal-actions">
+      <button class="btn" id="stamp-cancel">取消</button>
+      <button class="btn primary" id="stamp-apply">套用</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast" hidden></div>
+<div id="busy" hidden><div class="spinner"></div><span id="busy-text">處理中…</span></div>
+
+<script type="module" src="js/main.js"></script>
+</body>
+</html>

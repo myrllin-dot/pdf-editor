@@ -1,0 +1,37 @@
+# Tests
+
+Two layers, both runnable from this folder.
+
+```bash
+mkdir -p out
+node export.test.mjs        # headless: the PDF-writing path
+```
+
+`export.test.mjs` builds a two-page source PDF (page 2 deliberately `/Rotate 90`),
+applies one annotation of every type — including multi-line CJK, faux-bold CJK,
+an auto-upgraded font, and a rotated watermark — then writes `out/edited.pdf`.
+Render it and look at it:
+
+```bash
+pdftoppm -png -r 100 out/edited.pdf out/page
+pdftotext out/edited.pdf -        # proves text is real text, not raster
+```
+
+This is the test that catches silent font-subsetting corruption, where text
+extracts perfectly but renders blank. Compare the PNG, not just the text dump.
+
+## Browser tests
+
+These need Chrome and `puppeteer-core` (`npm i puppeteer-core`), plus the app
+served locally:
+
+```bash
+python3 -m http.server 8777     # from the repo root, in another shell
+node ui.test.mjs                # loads the app, opens a PDF, screenshots
+node e2e.test.mjs               # drives every tool, saves, captures the download
+```
+
+`e2e.test.mjs` is the one that matters: it clicks through editing existing text,
+pen, arrow, highlighter, a text box and a batch footer, then exports and leaves
+the result in `out/dl/`. Open that PDF and compare it with `out/ui-3-annotated.png` —
+they should match.

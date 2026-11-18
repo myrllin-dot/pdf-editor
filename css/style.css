@@ -1,0 +1,146 @@
+:root{
+  --bg:#13151a; --panel:#1c1f27; --panel-2:#23262f; --line:#2e323d;
+  --fg:#e7e9ee; --fg-dim:#9aa1ae; --accent:#6aa3ff; --accent-2:#2b6fd4;
+  --danger:#ef5350; --stage:#30343d;
+  --topbar-h:52px; --toolbar-w:64px; --options-w:216px;
+}
+*{box-sizing:border-box}
+/* Class/id display rules below would otherwise beat the UA sheet's [hidden]
+   rule, leaving the modal, spinner and dropzone permanently on screen. */
+[hidden]{display:none !important}
+html,body{height:100%}
+body{
+  margin:0; background:var(--bg); color:var(--fg);
+  font:14px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI","Noto Sans TC","PingFang TC","Microsoft JhengHei",sans-serif;
+  display:flex; flex-direction:column; overflow:hidden;
+  -webkit-text-size-adjust:100%;
+}
+
+/* ---------- top bar ---------- */
+#topbar{
+  flex:0 0 auto; height:var(--topbar-h); display:flex; align-items:center; gap:14px;
+  padding:0 12px; background:var(--panel); border-bottom:1px solid var(--line);
+  overflow-x:auto; scrollbar-width:none;
+}
+#topbar::-webkit-scrollbar{display:none}
+.brand{font-weight:650; letter-spacing:.3px; white-space:nowrap; color:var(--fg)}
+.group{display:flex; align-items:center; gap:6px; white-space:nowrap}
+.group.right{margin-left:auto}
+.readout{color:var(--fg-dim); font-variant-numeric:tabular-nums; min-width:62px; text-align:center; font-size:13px}
+
+.btn{
+  appearance:none; border:1px solid var(--line); background:var(--panel-2); color:var(--fg);
+  border-radius:7px; padding:6px 11px; font-size:13px; cursor:pointer; line-height:1.2;
+  transition:background .12s,border-color .12s,opacity .12s; white-space:nowrap;
+}
+.btn:hover:not(:disabled){background:#2b2f3a; border-color:#3b4150}
+.btn:active:not(:disabled){transform:translateY(1px)}
+.btn:disabled{opacity:.38; cursor:default}
+.btn.primary{background:var(--accent-2); border-color:var(--accent-2); color:#fff; font-weight:600}
+.btn.primary:hover:not(:disabled){background:#3b7fe4}
+.btn.icon{min-width:34px; padding:6px 8px; font-size:16px; text-align:center}
+
+/* ---------- layout ---------- */
+#body{flex:1 1 auto; display:flex; min-height:0}
+
+#toolbar{
+  flex:0 0 var(--toolbar-w); background:var(--panel); border-right:1px solid var(--line);
+  display:flex; flex-direction:column; align-items:stretch; padding:8px 6px; gap:4px; overflow-y:auto;
+}
+#toolbar .spacer{flex:1 1 auto}
+.tool{
+  appearance:none; border:1px solid transparent; background:transparent; color:var(--fg-dim);
+  border-radius:8px; padding:8px 2px; cursor:pointer; display:flex; flex-direction:column;
+  align-items:center; gap:3px; font-size:11px; transition:all .12s;
+}
+.tool span{font-size:17px; line-height:1}
+.tool em{font-style:normal; font-size:10.5px; letter-spacing:.2px}
+.tool:hover{background:var(--panel-2); color:var(--fg)}
+.tool.active{background:rgba(106,163,255,.16); border-color:rgba(106,163,255,.45); color:var(--accent)}
+.tool.danger:hover{background:rgba(239,83,80,.14); color:var(--danger)}
+
+#options{
+  flex:0 0 var(--options-w); background:var(--panel); border-right:1px solid var(--line);
+  padding:12px; overflow-y:auto;
+}
+.opt-row{margin-bottom:16px}
+.opt-row[hidden]{display:none}
+.opt-row > label{display:block; font-size:11.5px; text-transform:uppercase; letter-spacing:.6px; color:var(--fg-dim); margin-bottom:6px}
+.opt-row output{color:var(--accent); font-variant-numeric:tabular-nums; text-transform:none; letter-spacing:0}
+#swatches{display:flex; flex-wrap:wrap; gap:6px; margin-bottom:8px}
+.sw{width:22px; height:22px; border-radius:5px; border:2px solid transparent; cursor:pointer; padding:0}
+.sw.on{border-color:#fff; box-shadow:0 0 0 1px var(--line)}
+input[type=color]{width:100%; height:28px; padding:0; border:1px solid var(--line); border-radius:6px; background:var(--panel-2); cursor:pointer}
+input[type=range]{width:100%; accent-color:var(--accent)}
+select,input[type=text],input[type=number]{
+  width:100%; background:var(--panel-2); color:var(--fg); border:1px solid var(--line);
+  border-radius:6px; padding:6px 8px; font-size:13px; font-family:inherit;
+}
+.chk{display:flex; align-items:center; gap:6px; margin-top:8px; font-size:12.5px; color:var(--fg-dim); text-transform:none; letter-spacing:0; cursor:pointer}
+.chk input{accent-color:var(--accent)}
+.hint{font-size:11.5px; color:var(--fg-dim); line-height:1.5; border-top:1px solid var(--line); padding-top:10px}
+
+/* ---------- stage ---------- */
+#stage{flex:1 1 auto; background:var(--stage); overflow:auto; position:relative; -webkit-overflow-scrolling:touch}
+#dropzone{position:absolute; inset:0; display:grid; place-items:center; padding:24px; text-align:center}
+#dropzone.hot .dz-inner{border-color:var(--accent); background:rgba(106,163,255,.07)}
+.dz-inner{border:2px dashed var(--line); border-radius:14px; padding:44px 36px; max-width:460px; transition:all .15s}
+.dz-icon{font-size:40px; margin-bottom:8px}
+.dz-inner h2{margin:0 0 8px; font-size:19px; font-weight:600}
+.dz-inner p{margin:0; color:var(--fg-dim); font-size:13px; line-height:1.6}
+
+#canvas-wrap{display:grid; place-items:start center; padding:22px 22px 60px}
+#page-holder{position:relative; box-shadow:0 6px 28px rgba(0,0,0,.5); background:#fff; line-height:0}
+#page-canvas,#overlay-canvas{display:block}
+#overlay-canvas{position:absolute; inset:0; touch-action:none}
+#overlay-canvas.t-select{cursor:default}
+#overlay-canvas.t-textedit{cursor:text}
+#overlay-canvas.t-textbox{cursor:text}
+#overlay-canvas.t-pen,#overlay-canvas.t-arrow,#overlay-canvas.t-highlight{cursor:crosshair}
+#overlay-canvas.dragging{cursor:grabbing}
+
+#inline-editor{
+  position:absolute; z-index:5; margin:0; padding:1px 2px; border:1px solid var(--accent);
+  outline:2px solid rgba(106,163,255,.35); background:#fff; color:#000; resize:none;
+  overflow:hidden; border-radius:2px; line-height:1.15; white-space:pre;
+}
+
+/* ---------- modal ---------- */
+.modal{position:fixed; inset:0; background:rgba(8,9,12,.72); display:grid; place-items:center; z-index:50; padding:16px}
+.modal-card{background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:20px; width:min(460px,100%); max-height:90vh; overflow-y:auto}
+.modal-card h3{margin:0 0 14px; font-size:16px}
+.tabs{display:flex; gap:4px; margin-bottom:16px; border-bottom:1px solid var(--line)}
+.tab{appearance:none; background:transparent; border:0; border-bottom:2px solid transparent; color:var(--fg-dim); padding:8px 12px; cursor:pointer; font-size:13px; font-family:inherit}
+.tab.active{color:var(--accent); border-bottom-color:var(--accent)}
+.field{margin-bottom:13px}
+.field > label{display:block; font-size:11.5px; text-transform:uppercase; letter-spacing:.5px; color:var(--fg-dim); margin-bottom:5px}
+.field small{display:block; color:var(--fg-dim); font-size:11px; margin-top:4px}
+.field.two{display:grid; grid-template-columns:auto 1fr auto 1fr; gap:6px 10px; align-items:center}
+.field.two > label{margin:0; white-space:nowrap}
+.field.common{border-top:1px solid var(--line); padding-top:13px}
+.modal-actions{display:flex; justify-content:flex-end; gap:8px; margin-top:18px}
+
+/* ---------- toast / busy ---------- */
+#toast{
+  position:fixed; left:50%; bottom:26px; transform:translateX(-50%);
+  background:#111318; color:var(--fg); border:1px solid var(--line); border-radius:9px;
+  padding:11px 17px; font-size:13px; z-index:80; box-shadow:0 8px 24px rgba(0,0,0,.5);
+  max-width:min(520px,90vw); text-align:center;
+}
+#toast.err{border-color:var(--danger); color:#ffd9d8}
+#busy{position:fixed; inset:0; background:rgba(8,9,12,.6); display:flex; flex-direction:column; align-items:center; justify-content:center; gap:14px; z-index:90; font-size:13px; color:var(--fg)}
+.spinner{width:34px; height:34px; border:3px solid var(--line); border-top-color:var(--accent); border-radius:50%; animation:spin .8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* ---------- narrow screens / iPad portrait ---------- */
+@media (max-width:860px){
+  :root{--options-w:180px; --toolbar-w:56px}
+  .brand{display:none}
+}
+@media (max-width:660px){
+  #options{display:none}
+  #toolbar{flex-direction:row; flex:0 0 auto; order:2; border-right:0; border-top:1px solid var(--line); justify-content:space-around; padding:4px}
+  #toolbar .spacer{display:none}
+  #body{flex-direction:column}
+  #stage{order:1}
+}
