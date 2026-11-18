@@ -62,6 +62,7 @@ export function installTools(deps) {
         const hit = hitTest(sx, sy);
         state.selectedId = hit ? hit.id : null;
         if (hit) drag = { kind: 'move', id: hit.id, last: [sx, sy], moved: false };
+        deps.onSelect?.(hit || null);
         redraw();
         break;
       }
@@ -207,7 +208,7 @@ export function installTools(deps) {
     const scale = state.viewport.scale;
     const size = opts.size ?? state.fontSize;
     const fontKey = opts.fontKey ?? state.fontKey;
-    const bold = opts.bold ?? state.bold;
+    const bold = opts.bold ?? state.textStyle.bold;
     const color = opts.color ?? state.color;
 
     const [sx, sy] = opts.screen;
@@ -261,10 +262,21 @@ export function installTools(deps) {
 
     if (text) {
       const [px, py] = screenToPdf(e.screen);
+      const st = state.textStyle;
       added.push({
         id: nextId(), groupId, type: 'text', page: state.pageNum,
         x: px, y: py, text,
-        size: e.size, fontKey: e.fontKey, bold: e.bold, color: e.color,
+        size: e.size, fontKey: e.fontKey, color: e.color,
+        bold: e.bold,
+        italic: st.italic,
+        underline: st.underline,
+        letterSpacing: st.letterSpacing,
+        lineSpacing: st.lineSpacing,
+        align: st.align,
+        anchor: e.anchor ?? st.anchor,
+        frameW: e.frameW ?? st.frameW,
+        frameH: e.frameH ?? st.frameH,
+        effect: { ...st.effect },
       });
     }
 

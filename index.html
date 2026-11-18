@@ -81,7 +81,68 @@
 
     <div class="opt-row" data-for="textbox textedit">
       <label>字級 <output id="size-out">12</output></label>
-      <input type="range" id="size-range" min="5" max="72" step="0.5" value="12">
+      <input type="range" id="size-range" min="5" max="200" step="0.5" value="12">
+    </div>
+
+    <div class="opt-row" data-for="textbox textedit">
+      <label>樣式</label>
+      <div class="segbar">
+        <button type="button" class="seg" id="st-bold" title="粗體"><b>B</b></button>
+        <button type="button" class="seg" id="st-italic" title="斜體"><i>I</i></button>
+        <button type="button" class="seg" id="st-underline" title="底線"><u>U</u></button>
+      </div>
+    </div>
+
+    <div class="opt-row" data-for="textbox textedit">
+      <label>對齊</label>
+      <div class="segbar" id="align-bar">
+        <button type="button" class="seg" data-align="left" title="靠左">&#8676;</button>
+        <button type="button" class="seg" data-align="center" title="置中">&#8596;</button>
+        <button type="button" class="seg" data-align="right" title="靠右">&#8677;</button>
+      </div>
+    </div>
+
+    <div class="opt-row" data-for="textbox textedit">
+      <label>字距 <output id="tracking-out">0</output></label>
+      <input type="range" id="tracking-range" min="-4" max="30" step="0.5" value="0">
+      <label class="sub">行距 <output id="leading-out">1.2</output></label>
+      <input type="range" id="leading-range" min="0.7" max="3" step="0.05" value="1.2">
+    </div>
+
+    <div class="opt-row" data-for="textbox textedit">
+      <label>文字框</label>
+      <div class="field two tight">
+        <label>寬</label><input type="number" id="frame-w" min="0" step="5" value="0" title="0 = 隨文字自動">
+        <label>高</label><input type="number" id="frame-h" min="0" step="5" value="0" title="0 = 隨文字自動">
+      </div>
+      <small class="sub-note">0 = 隨文字自動。設寬度才會自動換行。</small>
+      <label class="sub">錨點</label>
+      <select id="anchor-select">
+        <option value="baseline">基線（預設）</option>
+        <option value="tl">左上</option><option value="tc">上中</option><option value="tr">右上</option>
+        <option value="ml">左中</option><option value="mc">正中</option><option value="mr">右中</option>
+        <option value="bl">左下</option><option value="bc">下中</option><option value="br">右下</option>
+      </select>
+    </div>
+
+    <div class="opt-row" data-for="textbox textedit">
+      <label>效果</label>
+      <select id="fx-type">
+        <option value="none">無</option>
+        <option value="outline">外框 Outline</option>
+        <option value="hollow">鏤空 Hollow</option>
+        <option value="echo">回聲 Echo</option>
+      </select>
+      <div id="fx-opts" hidden>
+        <label class="sub">粗細／間距 <output id="fx-width-out">1.5</output></label>
+        <input type="range" id="fx-width" min="0.2" max="8" step="0.1" value="1.5">
+        <label class="sub" id="fx-color-label">效果顏色</label>
+        <input type="color" id="fx-color" value="#000000">
+        <div id="fx-echo-opts" hidden>
+          <label class="sub">重複 <output id="fx-count-out">3</output></label>
+          <input type="range" id="fx-count" min="1" max="8" step="1" value="3">
+        </div>
+      </div>
     </div>
 
     <div class="opt-row" data-for="textbox textedit">
@@ -89,7 +150,6 @@
       <select id="font-select"></select>
       <input type="file" id="font-file" accept=".ttf,.otf,font/ttf,font/otf" hidden>
       <button type="button" id="font-remove" class="linkbtn" hidden>移除這個本機字體</button>
-      <label class="chk"><input type="checkbox" id="font-bold"> 粗體</label>
     </div>
 
     <div class="opt-row" data-for="highlight">

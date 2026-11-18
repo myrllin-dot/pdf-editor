@@ -49,3 +49,19 @@ node v2.test.mjs         # shapes + thumbnail rail
 `ocr-lang.mjs` is the one to re-run if anyone proposes changing the default
 language handling — it is the evidence that mixing languages wrecks Chinese
 accuracy. `mkscan.mjs` needs Pillow (`pip install pillow`) to draw the fixture.
+
+## Text styling
+
+```bash
+node textfx.test.mjs     # every effect through the PDF writer -> out/textfx.pdf
+pdftoppm -png -r 110 out/textfx.pdf out/textfx
+```
+
+Render it and look at it. It lays out bold / italic / underline, outline,
+hollow, echo, letter spacing, line spacing, frames with wrapping (Latin and
+CJK), alignment and all nine anchors on one page, so a regression in
+`js/textlayout.js` or the PDF text operators is visible at a glance.
+
+The companion check is that the canvas preview matches: `preview.test.mjs`
+(in the dev scratch set) renders the identical annotation list through
+`overlay.js` so the two images can be compared side by side.

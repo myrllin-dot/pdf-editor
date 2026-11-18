@@ -6,9 +6,13 @@
 
 import {
   PDFDocument, StandardFonts, rgb, degrees, BlendMode,
+  pushGraphicsState, popGraphicsState, concatTransformationMatrix,
+  setCharacterSpacing, setTextRenderingMode, setLineWidth, setStrokingRgbColor,
+  TextRenderingMode,
 } from '../vendor/pdf-lib/pdf-lib.esm.min.js';
 import fontkit from './fontkit-compat.js';
 import { LINE_HEIGHT, headLenPx, ARROW_BACK, ARROW_SPREAD, hexToRgb01, needsCJK } from './geom.js';
+import { layoutText, echoOffsets } from './textlayout.js';
 import * as fontRegistry from './fonts.js';
 
 const hexRgb = hex => rgb(...hexToRgb01(hex));
@@ -26,7 +30,7 @@ function makeFontResolver(doc, opts) {
   const cjkDefault = opts.defaultCjkKey || fontRegistry.defaultCjkKey;
   const cache = new Map();
 
-  return async function resolve(fontKey, bold, text) {
+  return async function resolve(fontKey, bold, italic, text) {
     let key = fontKey;
     let upgraded = false;
 
@@ -43,7 +47,8 @@ function makeFontResolver(doc, opts) {
 
     const desc = info(key);
     const embedded = desc.kind !== 'builtin';
-    const id = `${key}:${bold ? 1 : 0}`;
+    const variant = bold && italic ? 'bi' : bold ? 'b' : italic ? 'i' : 'r';
+    const id = `${key}:${embedded ? 'x' : variant}`;
 
     if (!cache.has(id)) {
       if (embedded) {
@@ -51,16 +56,105 @@ function makeFontResolver(doc, opts) {
         const bytes = await bytesFor(key);
         const font = await doc.embedFont(bytes, { subset: true });
         // One weight per file; bold is faked by drawing twice.
-        cache.set(`${key}:0`, font);
-        cache.set(`${key}:1`, font);
+        cache.set(`${key}:x`, font);     // one file serves every variant
       } else {
-        const name = bold ? desc.stdBold : desc.std;
+        const names = desc.std || {};
+        const name = names[variant] || names.r || 'Helvetica';
         cache.set(id, await doc.embedFont(StandardFonts[name] || StandardFonts.Helvetica));
       }
     }
 
     return { font: cache.get(id), fauxBold: embedded && bold, upgraded, embedded };
   };
+}
+
+/* ------------------------------------------------------------------ */
+/* text                                                                */
+/* ------------------------------------------------------------------ */
+
+const ITALIC_SHEAR = Math.tan(12 * Math.PI / 180);
+
+/**
+ * Writes one text annotation. Mirrors drawTextAnnot in overlay.js.
+ *
+ * Everything is drawn inside a single transform anchored at (a.x, a.y), which
+ * is what keeps rotation, page rotation and faux italic from fighting each
+ * other: lines are positioned relative to the anchor and the matrix does the
+ * rest.
+ */
+function drawTextAnnot(page, a, font, { fauxBold, embedded, pageRot }) {
+  const measure = str => font.widthOfTextAtSize(str, a.size);
+  const L = layoutText(a, measure);
+
+  const theta = ((pageRot || 0) + (a.rotate || 0)) * Math.PI / 180;
+  const shear = a.italic && embedded ? ITALIC_SHEAR : 0;
+  const cos = Math.cos(theta), sin = Math.sin(theta);
+
+  // rotate · shear, then translated to the anchor
+  const m = [cos, sin, cos * shear - sin, sin * shear + cos, a.x, a.y];
+
+  const eff = a.effect || { type: 'none' };
+  const ls = a.letterSpacing || 0;
+  const col = hexRgb(a.color);
+  const opacity = a.opacity ?? 1;
+
+  const stateOps = [pushGraphicsState(), concatTransformationMatrix(...m)];
+  if (ls) stateOps.push(setCharacterSpacing(ls));
+  page.pushOperators(...stateOps);
+
+  const at = ln => ({ x: ln.x - a.x, y: ln.baselineY - a.y });
+  const base = { size: a.size, font, color: col, opacity };
+
+  // echo copies sit behind everything else
+  if (eff.type === 'echo') {
+    const echoCol = hexRgb(eff.color || a.color);
+    for (const o of echoOffsets(eff)) {
+      for (const ln of L.lines) {
+        if (!ln.text) continue;
+        const p = at(ln);
+        page.drawText(ln.text, { ...base, color: echoCol, opacity: opacity * o.alpha,
+                                 x: p.x + o.dx, y: p.y + o.dy });
+      }
+    }
+  }
+
+  // Tr 1 = stroke only, Tr 2 = fill then stroke.
+  const strokeMode = eff.type === 'hollow' ? TextRenderingMode.Outline
+                   : eff.type === 'outline' ? TextRenderingMode.FillAndOutline
+                   : null;
+  if (strokeMode !== null) {
+    const sc = hexToRgb01(eff.type === 'hollow' ? a.color : (eff.color || '#000000'));
+    page.pushOperators(
+      setTextRenderingMode(strokeMode),
+      setLineWidth(Math.max(eff.width ?? (eff.type === 'hollow' ? 1 : 1.5), 0.1)),
+      setStrokingRgbColor(sc[0], sc[1], sc[2]),
+    );
+  }
+
+  for (const ln of L.lines) {
+    if (!ln.text) continue;
+    const p = at(ln);
+    page.drawText(ln.text, { ...base, x: p.x, y: p.y });
+    if (fauxBold && strokeMode === null) {
+      page.drawText(ln.text, { ...base, x: p.x + 0.4, y: p.y });
+    }
+  }
+
+  if (strokeMode !== null) page.pushOperators(setTextRenderingMode(TextRenderingMode.Fill));
+
+  if (a.underline) {
+    const th = Math.max(a.size * 0.055, 0.3);
+    for (const ln of L.lines) {
+      if (!ln.text) continue;
+      const p = at(ln);
+      page.drawRectangle({
+        x: p.x, y: p.y - a.size * 0.13 - th, width: ln.width, height: th,
+        color: col, opacity,
+      });
+    }
+  }
+
+  page.pushOperators(popGraphicsState());
 }
 
 /* ------------------------------------------------------------------ */
@@ -188,31 +282,10 @@ export async function buildPdf(originalBytes, annots, opts = {}) {
         }
 
         case 'text': {
-          const { font, fauxBold, upgraded, embedded } = await resolve(a.fontKey, a.bold, a.text);
+          const { font, fauxBold, upgraded, embedded } = await resolve(a.fontKey, a.bold, a.italic, a.text);
           if (upgraded) upgradedCount++;
           if (embedded) usedCjk = true;
-
-          const col = hexRgb(a.color);
-          const lines = String(a.text).split('\n');
-          const lh = a.size * LINE_HEIGHT;
-          const rot = degrees(pageRot + (a.rotate || 0));
-          const theta = (pageRot + (a.rotate || 0)) * Math.PI / 180;
-
-          lines.forEach((ln, i) => {
-            if (!ln) return;
-            // Step down one line *in the rotated frame* so multi-line
-            // blocks stay correct on rotated pages and watermarks.
-            const off = -i * lh;
-            const x = a.x - Math.sin(theta) * off;
-            const y = a.y + Math.cos(theta) * off;
-
-            const base = {
-              x, y, size: a.size, font, color: col,
-              rotate: rot, opacity: a.opacity ?? 1,
-            };
-            page.drawText(ln, base);
-            if (fauxBold) page.drawText(ln, { ...base, x: x + 0.4 });
-          });
+          drawTextAnnot(page, a, font, { fauxBold, embedded, pageRot });
           break;
         }
       }

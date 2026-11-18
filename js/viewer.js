@@ -97,37 +97,103 @@ async function extractTextItems(page, viewport) {
     return [];
   }
 
-  const items = [];
+  const raw = [];
   for (const it of tc.items) {
-    if (!it.str || !it.str.trim() || !it.transform) continue;
+    if (!it.str || !it.transform) continue;
+    if (!it.str.trim()) { raw.push({ spaceOnly: true, hasEOL: it.hasEOL }); continue; }
 
     const [a, b, c, d, e, f] = it.transform;
     // Glyph size = length of the transformed unit-y vector.
     const size = Math.hypot(c, d) || Math.hypot(a, b) || 10;
-    const width = it.width || 0;
-    const height = it.height || size;
-
-    // pdf.js text transform origin is the baseline-left of the run.
-    const pdfBox = {
-      x: e,
-      y: f - size * 0.22,         // drop to roughly the descender line
-      w: width,
-      h: height * 1.18 || size * 1.18,
-    };
-
     const style = tc.styles?.[it.fontName];
-    items.push({
+
+    raw.push({
       str: it.str,
       size,
-      pdf: pdfBox,
-      screen: pdfBoxToScreen(pdfBox, viewport),
+      baseline: f,
+      x: e,
+      w: it.width || 0,
+      h: it.height || size,
+      hasEOL: it.hasEOL,
       fontFamily: style?.fontFamily || 'sans-serif',
       bold: /bold|black|heavy|semibold/i.test(style?.fontFamily || it.fontName || ''),
       italic: /italic|oblique/i.test(style?.fontFamily || it.fontName || ''),
-      hasCJK: /[　-鿿豈-﫿＀-￯]/.test(it.str),
     });
   }
-  return items;
+
+  return mergeRuns(raw).map(r => {
+    const pdf = {
+      x: r.x,
+      y: r.baseline - r.size * 0.22,     // down to roughly the descender line
+      w: r.w,
+      h: (r.h || r.size) * 1.18,
+    };
+    return {
+      str: r.str,
+      size: r.size,
+      pdf,
+      screen: pdfBoxToScreen(pdf, viewport),
+      fontFamily: r.fontFamily,
+      bold: r.bold,
+      italic: r.italic,
+      hasCJK: /[\u3000-\u9fff\uf900-\ufaff\uff00-\uffef]/.test(r.str),
+      source: 'native',
+    };
+  });
+}
+
+/**
+ * Joins adjacent runs that belong to the same visual line.
+ *
+ * A PDF has no concept of a line of text: a title can be emitted as a dozen
+ * separate show-text operations, and generators split runs whenever spacing,
+ * kerning or encoding changes. Editing one run meant covering a fragment and
+ * leaving the rest of the word on the page, which is not what anyone sees or
+ * expects. So runs sharing a baseline with no meaningful horizontal gap are
+ * treated as one editable line.
+ */
+function mergeRuns(raw) {
+  const out = [];
+  let cur = null;
+
+  const flush = () => { if (cur) out.push(cur); cur = null; };
+
+  for (const r of raw) {
+    if (r.spaceOnly) {                 // whitespace-only run: a soft separator
+      if (cur) cur.pendingSpace = true;
+      if (r.hasEOL) flush();
+      continue;
+    }
+
+    if (cur) {
+      const sameLine = Math.abs(r.baseline - cur.baseline) <= Math.max(cur.size, r.size) * 0.3;
+      const sizeClose = Math.min(r.size, cur.size) / Math.max(r.size, cur.size) > 0.6;
+      const gap = r.x - (cur.x + cur.w);
+      // A generous gap still counts as one line: wide letter-spacing and
+      // justified text legitimately leave space between runs. Anything past
+      // this is a separate block (a column, or a different field).
+      const adjacent = gap > -Math.max(cur.size, r.size) && gap < Math.max(cur.size, r.size) * 2.5;
+
+      if (sameLine && sizeClose && adjacent) {
+        const needsSpace = cur.pendingSpace
+          || (gap > cur.size * 0.22 && !/\s$/.test(cur.str) && !/^\s/.test(r.str));
+        cur.str += (needsSpace ? ' ' : '') + r.str;
+        cur.w = (r.x + r.w) - cur.x;
+        cur.size = Math.max(cur.size, r.size);
+        cur.h = Math.max(cur.h, r.h);
+        cur.bold = cur.bold || r.bold;
+        cur.pendingSpace = false;
+        if (r.hasEOL) flush();
+        continue;
+      }
+    }
+
+    flush();
+    cur = { ...r, pendingSpace: false };
+    if (r.hasEOL) flush();
+  }
+  flush();
+  return out;
 }
 
 /* ---------- coordinate conversion ---------- */

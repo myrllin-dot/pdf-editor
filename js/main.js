@@ -11,6 +11,7 @@ import { ocrPage, meanConfidence, terminate as terminateOcr } from './ocr.js';
 import { buildThumbs, setActiveThumb, refreshThumb, destroyThumbs, thumbsReady } from './thumbs.js';
 import { refreshTextItems } from './viewer.js';
 import { initFonts, listFonts, getFont, addLocalFont, removeLocalFont } from './fonts.js';
+import { findAnnot, commit } from './state.js';
 import { buildPdf } from './export.js';
 
 const $ = id => document.getElementById(id);
@@ -129,9 +130,11 @@ async function loadFile(file) {
     el.wrap.hidden = false;
     setEnabled(true);
     refreshHistoryButtons();
-    await fitWidth();
+    // Show the rail BEFORE fitting: it takes ~138px out of the stage, and
+    // fitting first produced a scale that overflowed by exactly that much.
     el.thumbs.hidden = false;
     buildThumbs(el.thumbs, { onSelect: goToPage });
+    await fitWidth();
     toast(`已開啟 ${file.name}（${state.numPages} 頁）`);
   } catch (err) {
     const msg = /password/i.test(err.message || '')
@@ -248,6 +251,123 @@ function setTool(name) {
   el.hint.textContent = HINTS[name] || '';
   document.querySelectorAll('.opt-row[data-for]').forEach(row => {
     row.hidden = !row.dataset.for.split(' ').includes(name);
+  });
+}
+
+/* ---------------- text style ---------------- */
+
+/** The selected annotation if it is text, else null. */
+function selectedText() {
+  const a = state.selectedId ? findAnnot(state.selectedId) : null;
+  return a && a.type === 'text' ? a : null;
+}
+
+/**
+ * Applies a style change. With a text box selected it edits that box (and is
+ * undoable); otherwise it sets the default for the next one.
+ */
+function applyTextStyle(patch) {
+  const sel = selectedText();
+  if (sel) {
+    commit();
+    for (const [k, v] of Object.entries(patch)) {
+      sel[k] = (k === 'effect') ? { ...(sel.effect || {}), ...v } : v;
+    }
+    markDirty();
+    redraw();
+  } else {
+    for (const [k, v] of Object.entries(patch)) {
+      state.textStyle[k] = (k === 'effect')
+        ? { ...state.textStyle.effect, ...v }
+        : v;
+    }
+    if ('bold' in patch) state.bold = patch.bold;
+  }
+}
+
+/** Mirrors the selected text box (or the defaults) into the controls. */
+function syncTextControls() {
+  const sel = selectedText();
+  const st = state.textStyle;
+  const v = k => (sel && sel[k] !== undefined ? sel[k] : st[k]);
+  const fx = (sel?.effect) || st.effect;
+
+  $('st-bold').classList.toggle('on', !!v('bold'));
+  $('st-italic').classList.toggle('on', !!v('italic'));
+  $('st-underline').classList.toggle('on', !!v('underline'));
+
+  const align = v('align') || 'left';
+  document.querySelectorAll('#align-bar .seg').forEach(b =>
+    b.classList.toggle('on', b.dataset.align === align));
+
+  $('tracking-range').value = v('letterSpacing') ?? 0;
+  $('tracking-out').value = $('tracking-range').value;
+  $('leading-range').value = v('lineSpacing') ?? 1.2;
+  $('leading-out').value = Number($('leading-range').value).toFixed(2);
+  $('frame-w').value = Math.round(v('frameW') || 0);
+  $('frame-h').value = Math.round(v('frameH') || 0);
+  $('anchor-select').value = v('anchor') || 'baseline';
+
+  $('fx-type').value = fx.type || 'none';
+  $('fx-opts').hidden = (fx.type || 'none') === 'none';
+  $('fx-echo-opts').hidden = fx.type !== 'echo';
+  $('fx-color-label').textContent = fx.type === 'echo' ? '回聲顏色' : '外框顏色';
+  $('fx-width').value = fx.width ?? 1.5;
+  $('fx-width-out').value = $('fx-width').value;
+  $('fx-color').value = fx.color || '#000000';
+  $('fx-count').value = fx.count ?? 3;
+  $('fx-count-out').value = $('fx-count').value;
+
+  if (sel) {
+    $('size-range').value = sel.size;
+    $('size-out').value = sel.size;
+    $('font-select').value = listFonts().some(f => f.key === sel.fontKey) ? sel.fontKey : 'sans';
+  }
+}
+
+function wireTextStyle() {
+  const toggle = (id, key) => $(id).addEventListener('click', () => {
+    const cur = $(id).classList.contains('on');
+    applyTextStyle({ [key]: !cur });
+    syncTextControls();
+  });
+  toggle('st-bold', 'bold');
+  toggle('st-italic', 'italic');
+  toggle('st-underline', 'underline');
+
+  document.querySelectorAll('#align-bar .seg').forEach(btn =>
+    btn.addEventListener('click', () => {
+      applyTextStyle({ align: btn.dataset.align });
+      syncTextControls();
+    }));
+
+  $('tracking-range').addEventListener('input', e => {
+    $('tracking-out').value = e.target.value;
+    applyTextStyle({ letterSpacing: parseFloat(e.target.value) });
+  });
+  $('leading-range').addEventListener('input', e => {
+    $('leading-out').value = Number(e.target.value).toFixed(2);
+    applyTextStyle({ lineSpacing: parseFloat(e.target.value) });
+  });
+  for (const [id, key] of [['frame-w', 'frameW'], ['frame-h', 'frameH']]) {
+    $(id).addEventListener('input', e =>
+      applyTextStyle({ [key]: Math.max(0, parseFloat(e.target.value) || 0) }));
+  }
+  $('anchor-select').addEventListener('change', e => applyTextStyle({ anchor: e.target.value }));
+
+  $('fx-type').addEventListener('change', e => {
+    applyTextStyle({ effect: { type: e.target.value } });
+    syncTextControls();
+  });
+  $('fx-width').addEventListener('input', e => {
+    $('fx-width-out').value = e.target.value;
+    applyTextStyle({ effect: { width: parseFloat(e.target.value) } });
+  });
+  $('fx-color').addEventListener('input', e =>
+    applyTextStyle({ effect: { color: e.target.value } }));
+  $('fx-count').addEventListener('input', e => {
+    $('fx-count-out').value = e.target.value;
+    applyTextStyle({ effect: { count: parseInt(e.target.value, 10) } });
   });
 }
 
@@ -407,7 +527,10 @@ function wire() {
     state.lineWidth = parseFloat(e.target.value); $('width-out').value = e.target.value;
   });
   $('size-range').addEventListener('input', e => {
-    state.fontSize = parseFloat(e.target.value); $('size-out').value = e.target.value;
+    const v = parseFloat(e.target.value);
+    $('size-out').value = e.target.value;
+    const sel = selectedText();
+    if (sel) applyTextStyle({ size: v }); else state.fontSize = v;
   });
   $('font-select').addEventListener('change', e => {
     if (e.target.value === '__add__') {
@@ -416,6 +539,8 @@ function wire() {
       return;
     }
     state.fontKey = e.target.value;
+    const sel = selectedText();
+    if (sel) applyTextStyle({ fontKey: state.fontKey });
     syncFontControls();
     redraw();
   });
@@ -445,7 +570,6 @@ function wire() {
       toast(`已移除「${label}」。用到它的文字會改用預設字體。`);
     }
   });
-  $('font-bold').addEventListener('change', e => { state.bold = e.target.checked; });
   $('alpha-range').addEventListener('input', e => {
     state.highlightAlpha = parseFloat(e.target.value) / 100;
     $('alpha-out').value = `${e.target.value}%`;
@@ -481,6 +605,7 @@ function wire() {
         : '中文文件請用這個。同時載入英文會明顯拉低中文辨識率。';
   });
 
+  wireTextStyle();
   $('btn-stamps').addEventListener('click', openStamps);
   $('stamp-cancel').addEventListener('click', () => { el.modal.hidden = true; });
   $('stamp-apply').addEventListener('click', applyStampFromForm);
@@ -543,7 +668,9 @@ tools = installTools({
   editor: el.editor,
   redraw,
   onChange: markDirty,
+  onSelect: () => syncTextControls(),
   toast,
 });
+syncTextControls();
 
 console.info(`PDF Editor ready · pdf.js ${PdfJsVersion}`);

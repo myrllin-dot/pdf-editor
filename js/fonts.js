@@ -20,9 +20,15 @@ const DIR = new URL('../vendor/fonts/', import.meta.url).href;
 
 /** PDF's standard 14. `std` names match pdf-lib's StandardFonts keys. */
 const BUILT_IN = [
-  { key: 'sans',  label: '無襯線 Helvetica', std: 'Helvetica',  stdBold: 'HelveticaBold',  css: 'Helvetica, Arial, sans-serif' },
-  { key: 'serif', label: '襯線 Times',       std: 'TimesRoman', stdBold: 'TimesRomanBold', css: '"Times New Roman", Times, serif' },
-  { key: 'mono',  label: '等寬 Courier',     std: 'Courier',    stdBold: 'CourierBold',    css: '"Courier New", Courier, monospace' },
+  { key: 'sans',  label: '無襯線 Helvetica',
+    std: { r: 'Helvetica', b: 'HelveticaBold', i: 'HelveticaOblique', bi: 'HelveticaBoldOblique' },
+    css: 'Helvetica, Arial, sans-serif' },
+  { key: 'serif', label: '襯線 Times',
+    std: { r: 'TimesRoman', b: 'TimesRomanBold', i: 'TimesRomanItalic', bi: 'TimesRomanBoldItalic' },
+    css: '"Times New Roman", Times, serif' },
+  { key: 'mono',  label: '等寬 Courier',
+    std: { r: 'Courier', b: 'CourierBold', i: 'CourierOblique', bi: 'CourierBoldOblique' },
+    css: '"Courier New", Courier, monospace' },
 ];
 
 const registry = new Map();      // key -> descriptor

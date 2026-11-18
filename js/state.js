@@ -31,6 +31,14 @@ export const state = {
   fontSize: 12,
   fontKey: 'sans',
   bold: false,
+  /** Style applied to new text, and edited in place when text is selected. */
+  textStyle: {
+    bold: false, italic: false, underline: false,
+    letterSpacing: 0, lineSpacing: 1.2,
+    align: 'left', anchor: 'baseline',
+    frameW: 0, frameH: 0,
+    effect: { type: 'none', width: 1.5, color: '#000000', count: 3, offsetX: 3, offsetY: -3 },
+  },
   highlightAlpha: 0.35,
   shapeFill: false,
   fillColor: '#ffeb3b',
