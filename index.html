@@ -38,6 +38,8 @@
   </div>
 
   <div class="group right">
+    <button id="btn-guides" class="btn icon" title="出血／安全框線 (G)" disabled>&#9707;</button>
+    <button id="btn-help" class="btn icon" title="快捷鍵 (?)">?</button>
     <button id="btn-ocr" class="btn" disabled title="辨識掃描頁面上的文字">文字辨識…</button>
     <button id="btn-stamps" class="btn" disabled>批次標記…</button>
   </div>
@@ -270,6 +272,89 @@
       <button class="btn" id="stamp-cancel">取消</button>
       <button class="btn primary" id="stamp-apply">套用</button>
     </div>
+  </div>
+</div>
+
+<!-- 選取時浮出的快捷列 -->
+<div id="sel-bar" hidden>
+  <div class="sb-group" title="置中於頁面">
+    <button class="sb" data-center="h">&#8596;</button>
+    <button class="sb" data-center="v">&#8597;</button>
+  </div>
+  <div class="sb-sep"></div>
+  <div class="sb-group" id="sb-size-text" hidden>
+    <span class="sb-label">字級</span>
+    <input type="number" id="sb-size" min="1" max="400" step="1">
+  </div>
+  <div class="sb-group" id="sb-size-box" hidden>
+    <span class="sb-label">寬</span><input type="number" id="sb-w" min="1" step="1">
+    <span class="sb-label">高</span><input type="number" id="sb-h" min="1" step="1">
+  </div>
+  <div class="sb-sep"></div>
+  <div class="sb-group" title="圖層順序">
+    <button class="sb" data-layer="back" title="移到最後">&#8676;</button>
+    <button class="sb" data-layer="backward" title="往後一層">&#8592;</button>
+    <span class="sb-label" id="sb-depth">—</span>
+    <button class="sb" data-layer="forward" title="往前一層">&#8594;</button>
+    <button class="sb" data-layer="front" title="移到最前">&#8677;</button>
+  </div>
+  <div class="sb-sep"></div>
+  <div class="sb-group" title="透明度">
+    <span class="sb-label">不透明</span>
+    <input type="range" id="sb-opacity" min="5" max="100" step="5" value="100">
+    <span class="sb-label" id="sb-opacity-out">100%</span>
+  </div>
+  <div class="sb-sep"></div>
+  <button class="sb danger" id="sb-delete" title="刪除 (Delete)">&#128465;</button>
+</div>
+
+<!-- 出血／安全框線 -->
+<div id="guides-modal" class="modal" hidden>
+  <div class="modal-card">
+    <h3>出血與安全框線</h3>
+    <p class="modal-note">
+      只是畫面上的參考線，<strong>不會印出、也不會存進 PDF</strong>。
+      預設是 KDP／Lulu 常用的 0.125 吋出血、距裁切線 0.25 吋安全範圍。
+    </p>
+    <div class="field"><label class="chk"><input type="checkbox" id="gd-on"> 顯示框線</label></div>
+    <div class="field two">
+      <label>出血</label><input type="number" id="gd-bleed" step="0.5" value="3.18">
+      <label>安全</label><input type="number" id="gd-safe" step="0.5" value="6.35">
+    </div>
+    <div class="field"><label>單位</label>
+      <select id="gd-unit"><option value="mm">公釐 mm</option><option value="in">英吋 inch</option><option value="pt">點 pt</option></select>
+    </div>
+    <div class="field">
+      <label class="chk"><input type="checkbox" id="gd-center" checked> 顯示中心線</label>
+      <label class="chk"><input type="checkbox" id="gd-snap" checked> 拖曳時吸附（按住 Alt 暫時關閉）</label>
+      <label class="chk"><input type="checkbox" id="gd-baseline" checked> 選到文字時顯示基準線</label>
+    </div>
+    <div class="modal-actions"><button class="btn primary" id="gd-close">完成</button></div>
+  </div>
+</div>
+
+<!-- 快捷鍵 -->
+<div id="help-modal" class="modal" hidden>
+  <div class="modal-card">
+    <h3>快捷鍵</h3>
+    <div class="keys">
+      <div><kbd>V</kbd> 選取</div><div><kbd>A</kbd> 加字</div>
+      <div><kbd>E</kbd> 改字</div><div><kbd>P</kbd> 手繪</div>
+      <div><kbd>W</kbd> 箭頭</div><div><kbd>L</kbd> 直線</div>
+      <div><kbd>R</kbd> 矩形</div><div><kbd>O</kbd> 橢圓</div>
+      <div><kbd>H</kbd> 螢光</div><div><kbd>G</kbd> 出血框線</div>
+      <div><kbd>F</kbd> 頁面縮圖</div><div><kbd>?</kbd> 這個說明</div>
+    </div>
+    <h3 style="margin-top:18px">編輯</h3>
+    <div class="keys">
+      <div><kbd>⌘</kbd><kbd>Z</kbd> 復原</div><div><kbd>⌘⇧</kbd><kbd>Z</kbd> 重做</div>
+      <div><kbd>⌘</kbd><kbd>S</kbd> 另存 PDF</div><div><kbd>Delete</kbd> 刪除選取</div>
+      <div><kbd>]</kbd> 往前一層</div><div><kbd>[</kbd> 往後一層</div>
+      <div><kbd>⌥</kbd><kbd>]</kbd> 移到最前</div><div><kbd>⌥</kbd><kbd>[</kbd> 移到最後</div>
+      <div><kbd>←</kbd><kbd>→</kbd> 翻頁</div><div><kbd>Alt</kbd>+拖曳 暫時不吸附</div>
+      <div><kbd>Shift</kbd>+拖曳 鎖定比例／角度</div><div><kbd>Esc</kbd> 取消輸入</div>
+    </div>
+    <div class="modal-actions"><button class="btn primary" id="help-close">知道了</button></div>
   </div>
 </div>
 

@@ -107,6 +107,43 @@ export function removeAnnot(id) {
   return true;
 }
 
+/* ---------- stacking order ---------- */
+
+/**
+ * Annotations draw in array order, so z-order is position in the array.
+ * Moves are confined to the annotation's own page: reordering across pages
+ * would be meaningless and would scramble unrelated marks.
+ */
+export function reorder(id, where) {
+  const a = findAnnot(id);
+  if (!a) return false;
+
+  const siblings = state.annots.filter(x => x.page === a.page);
+  const at = siblings.indexOf(a);
+  const target = where === 'front' ? siblings.length - 1
+               : where === 'back' ? 0
+               : where === 'forward' ? Math.min(at + 1, siblings.length - 1)
+               : Math.max(at - 1, 0);
+  if (target === at) return false;
+
+  commit();
+  siblings.splice(at, 1);
+  siblings.splice(target, 0, a);
+
+  // Write the reordered page back into the flat list, leaving other pages put.
+  let i = 0;
+  state.annots = state.annots.map(x => (x.page === a.page ? siblings[i++] : x));
+  return true;
+}
+
+/** 0-based depth of an annotation among its page's marks, and that page's count. */
+export function layerInfo(id) {
+  const a = findAnnot(id);
+  if (!a) return null;
+  const siblings = state.annots.filter(x => x.page === a.page);
+  return { index: siblings.indexOf(a), total: siblings.length };
+}
+
 /* ---------- colour utils ---------- */
 export function hexToRgb(hex) {
   const h = hex.replace('#', '');

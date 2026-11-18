@@ -9,6 +9,7 @@ import { LINE_HEIGHT, headLenPx, ARROW_BACK, ARROW_SPREAD } from './geom.js';
 import { cssFamily, getFont, defaultCjkKey } from './fonts.js';
 import { needsCJK } from './geom.js';
 import { layoutText, lineWidth, echoOffsets, ASCENT } from './textlayout.js';
+import { drawGuides, drawBaselines, drawSnapHints } from './guides.js';
 
 /** Kept for callers that still import it; the registry is the real source. */
 export const CANVAS_FONTS = {
@@ -64,7 +65,7 @@ const rgba = (hex, alpha = 1) => {
 /* main draw                                                           */
 /* ------------------------------------------------------------------ */
 
-export function drawOverlay(canvas, viewport, { preview = null } = {}) {
+export function drawOverlay(canvas, viewport, { preview = null, snap = null } = {}) {
   const dpr = Math.min(window.devicePixelRatio || 1, 3);
   canvas.width = Math.floor(viewport.width * dpr);
   canvas.height = Math.floor(viewport.height * dpr);
@@ -75,7 +76,7 @@ export function drawOverlay(canvas, viewport, { preview = null } = {}) {
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   ctx.clearRect(0, 0, viewport.width, viewport.height);
 
-  drawOverlayTo(ctx, viewport, state.pageNum, { preview, showSelection: true });
+  drawOverlayTo(ctx, viewport, state.pageNum, { preview, showSelection: true, snap });
 }
 
 /**
@@ -83,7 +84,7 @@ export function drawOverlay(canvas, viewport, { preview = null } = {}) {
  * and the thumbnail rail both go through here, which is why a mark always
  * looks the same in the rail as it does full size.
  */
-export function drawOverlayTo(ctx, viewport, pageNum, { preview = null, showSelection = false } = {}) {
+export function drawOverlayTo(ctx, viewport, pageNum, { preview = null, showSelection = false, snap = null } = {}) {
   for (const a of state.annots) {
     if (a.page !== pageNum) continue;
     drawAnnot(ctx, a, viewport);
@@ -91,15 +92,37 @@ export function drawOverlayTo(ctx, viewport, pageNum, { preview = null, showSele
 
   if (preview) drawAnnot(ctx, preview, viewport, true);
 
+  // Guides sit above the marks so they stay readable over dark artwork, but
+  // only on the live canvas -- thumbnails would be unreadable with them.
+  if (showSelection) drawGuides(ctx, viewport);
+
   if (showSelection && state.selectedId) {
     const sel = findAnnot(state.selectedId);
-    if (sel && sel.page === pageNum) drawSelection(ctx, sel, viewport);
+    if (sel && sel.page === pageNum) {
+      drawSelection(ctx, sel, viewport);
+      if (sel.type === 'text') drawTextBaselines(ctx, sel, viewport);
+    }
   }
+
+  if (snap) drawSnapHints(ctx, viewport, snap.hitX, snap.hitY);
+}
+
+/** The 基準線: where each line of the selected text actually sits. */
+function drawTextBaselines(ctx, a, viewport) {
+  const scale = viewport.scale;
+  const L = layoutText(a, makeMeasure(a));
+  const [ax, ay] = pdfToScreen([a.x, a.y], viewport);
+  ctx.save();
+  ctx.translate(ax, ay);
+  if (a.rotate) ctx.rotate(-a.rotate * Math.PI / 180);
+  drawBaselines(ctx, L.lines, ln => [(ln.x - a.x) * scale, -(ln.baselineY - a.y) * scale], scale);
+  ctx.restore();
 }
 
 function drawAnnot(ctx, a, viewport, isPreview = false) {
   ctx.save();
   if (isPreview) ctx.globalAlpha = 0.75;
+  ctx.globalAlpha *= a.opacity ?? 1;      // applies to every annotation type
 
   switch (a.type) {
     case 'whiteout': {
@@ -205,7 +228,6 @@ function drawTextAnnot(ctx, a, viewport) {
   const L = layoutText(a, makeMeasure(a));
   const [ax, ay] = pdfToScreen([a.x, a.y], viewport);
 
-  ctx.globalAlpha *= a.opacity ?? 1;
   ctx.font = cssFont(a, scale);
   ctx.textBaseline = 'alphabetic';
   ctx.translate(ax, ay);
@@ -401,6 +423,9 @@ export function screenBBox(a, viewport = state.viewport) {
   }
   return null;
 }
+
+/** Screen bbox of an annotation, for snapping. */
+export const annotScreenBox = (a, viewport = state.viewport) => screenBBox(a, viewport);
 
 const inBox = (b, x, y, slack = 0) =>
   b && x >= b.x - slack && x <= b.x + b.w + slack && y >= b.y - slack && y <= b.y + b.h + slack;

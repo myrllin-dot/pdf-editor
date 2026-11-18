@@ -11,7 +11,9 @@ import { ocrPage, meanConfidence, terminate as terminateOcr } from './ocr.js';
 import { buildThumbs, setActiveThumb, refreshThumb, destroyThumbs, thumbsReady } from './thumbs.js';
 import { refreshTextItems } from './viewer.js';
 import { initFonts, listFonts, getFont, addLocalFont, removeLocalFont } from './fonts.js';
-import { findAnnot, commit } from './state.js';
+import { findAnnot, commit, reorder } from './state.js';
+import { installSelBar, update as updateSelBar } from './selbar.js';
+import { guides, MM, IN } from './guides.js';
 import { buildPdf } from './export.js';
 
 const $ = id => document.getElementById(id);
@@ -22,6 +24,7 @@ const el = {
   stage: $('stage'), pageLabel: $('page-label'), zoomLabel: $('zoom-label'),
   toast: $('toast'), busy: $('busy'), busyText: $('busy-text'),
   modal: $('stamp-modal'), hint: $('tool-hint'),
+  guidesModal: $('guides-modal'), helpModal: $('help-modal'),
   ocrModal: $('ocr-modal'), thumbs: $('thumbs'),
 };
 
@@ -61,7 +64,7 @@ const busy = (on, text = '處理中…') => {
 
 function setEnabled(on) {
   for (const id of ['btn-save', 'btn-prev', 'btn-next', 'btn-zoom-in', 'btn-zoom-out',
-                    'btn-zoom-fit', 'btn-stamps', 'btn-ocr', 'btn-thumbs']) {
+                    'btn-zoom-fit', 'btn-stamps', 'btn-ocr', 'btn-thumbs', 'btn-guides']) {
     $(id).disabled = !on;
   }
 }
@@ -79,8 +82,8 @@ const markDirty = () => {
 
 /* ---------------- rendering ---------------- */
 
-const redraw = preview => {
-  if (state.viewport) drawOverlay(el.overlay, state.viewport, { preview });
+const redraw = (preview, snap) => {
+  if (state.viewport) drawOverlay(el.overlay, state.viewport, { preview, snap });
 };
 
 async function showPage() {
@@ -93,6 +96,7 @@ async function showPage() {
     el.pageLabel.textContent = `${state.pageNum} / ${state.numPages}`;
     el.zoomLabel.textContent = `${Math.round(state.scale * 100)}%`;
     if (thumbsReady()) setActiveThumb(state.pageNum);
+    updateSelBar();
   } catch (err) {
     toast(`頁面繪製失敗：${err.message}`, true);
   }
@@ -238,6 +242,61 @@ async function save() {
   } finally {
     busy(false);
   }
+}
+
+/* ---------------- guides ---------------- */
+
+const UNIT = { mm: MM, in: IN, pt: 1 };
+
+function guidesToForm() {
+  const u = UNIT[$('gd-unit').value] || MM;
+  $('gd-on').checked = guides.on;
+  $('gd-bleed').value = +(guides.bleedPt / u).toFixed(3);
+  $('gd-safe').value = +(guides.safePt / u).toFixed(3);
+  $('gd-center').checked = guides.showCenter;
+  $('gd-snap').checked = guides.snap;
+  $('gd-baseline').checked = guides.showBaseline;
+  $('btn-guides').classList.toggle('primary', guides.on);
+}
+
+function formToGuides() {
+  const u = UNIT[$('gd-unit').value] || MM;
+  guides.on = $('gd-on').checked;
+  guides.bleedPt = Math.max(0, parseFloat($('gd-bleed').value) || 0) * u;
+  guides.safePt = Math.max(0, parseFloat($('gd-safe').value) || 0) * u;
+  guides.showCenter = $('gd-center').checked;
+  guides.snap = $('gd-snap').checked;
+  guides.showBaseline = $('gd-baseline').checked;
+  $('btn-guides').classList.toggle('primary', guides.on);
+  redraw();
+}
+
+function wireGuides() {
+  for (const id of ['gd-on', 'gd-bleed', 'gd-safe', 'gd-center', 'gd-snap', 'gd-baseline']) {
+    $(id).addEventListener('input', formToGuides);
+    $(id).addEventListener('change', formToGuides);
+  }
+  $('gd-unit').addEventListener('change', guidesToForm);   // re-express, don't rescale
+  $('gd-close').addEventListener('click', () => { el.guidesModal.hidden = true; });
+  el.guidesModal.addEventListener('click', e => {
+    if (e.target === el.guidesModal) el.guidesModal.hidden = true;
+  });
+  $('btn-guides').addEventListener('click', () => {
+    guides.on = !guides.on;
+    guidesToForm();
+    redraw();
+    if (guides.on) el.guidesModal.hidden = false;
+  });
+  guidesToForm();
+}
+
+function wireHelp() {
+  const show = () => { el.helpModal.hidden = false; };
+  $('btn-help').addEventListener('click', show);
+  $('help-close').addEventListener('click', () => { el.helpModal.hidden = true; });
+  el.helpModal.addEventListener('click', e => {
+    if (e.target === el.helpModal) el.helpModal.hidden = true;
+  });
 }
 
 /* ---------------- tool + options UI ---------------- */
@@ -504,8 +563,9 @@ function wire() {
     b.addEventListener('click', () => setTool(b.dataset.tool));
   });
   $('btn-delete').addEventListener('click', () => {
-    if (tools?.deleteSelected()) toast('已刪除。');
+    if (tools?.deleteSelected()) { updateSelBar(); toast('已刪除。'); }
   });
+  el.stage.addEventListener('scroll', () => updateSelBar(), { passive: true });
 
   $('btn-prev').addEventListener('click', () => {
     if (state.pageNum > 1) { state.pageNum--; state.selectedId = null; showPage(); }
@@ -605,6 +665,8 @@ function wire() {
         : '中文文件請用這個。同時載入英文會明顯拉低中文辨識率。';
   });
 
+  wireGuides();
+  wireHelp();
   wireTextStyle();
   $('btn-stamps').addEventListener('click', openStamps);
   $('stamp-cancel').addEventListener('click', () => { el.modal.hidden = true; });
@@ -621,7 +683,7 @@ function wire() {
     const mod = e.metaKey || e.ctrlKey;
     if (mod && e.key.toLowerCase() === 'z') {
       e.preventDefault();
-      if (e.shiftKey ? redo() : undo()) { markDirty(); redraw(); }
+      if (e.shiftKey ? redo() : undo()) { markDirty(); redraw(); updateSelBar(); }
     } else if (mod && e.key.toLowerCase() === 's') {
       e.preventDefault(); save();
     } else if (e.key === 'Delete' || e.key === 'Backspace') {
@@ -631,9 +693,20 @@ function wire() {
     else {
       const k = e.key.toLowerCase();
       if (k === 'f') { e.preventDefault(); $('btn-thumbs').click(); return; }
+      if (k === 'g') { e.preventDefault(); $('btn-guides').click(); return; }
+      if (e.key === '?' || (e.shiftKey && k === '/')) { e.preventDefault(); $('btn-help').click(); return; }
+      if (k === '[' || k === ']') {
+        if (!state.selectedId) return;
+        e.preventDefault();
+        const where = k === ']'
+          ? (e.altKey ? 'front' : 'forward')
+          : (e.altKey ? 'back' : 'backward');
+        if (reorder(state.selectedId, where)) { markDirty(); redraw(); updateSelBar(); }
+        return;
+      }
       const map = {
-        v: 'select', e: 'textedit', t: 'textbox', p: 'pen',
-        a: 'arrow', h: 'highlight', l: 'line', r: 'rect', o: 'ellipse',
+        v: 'select', a: 'textbox', t: 'textbox', e: 'textedit', p: 'pen',
+        w: 'arrow', h: 'highlight', l: 'line', r: 'rect', o: 'ellipse',
       };
       const t = map[k];
       if (t) setTool(t);
@@ -647,7 +720,7 @@ function wire() {
   let resizeTimer;
   window.addEventListener('resize', () => {
     clearTimeout(resizeTimer);
-    resizeTimer = setTimeout(() => { if (state.pdfDoc) redraw(); }, 150);
+    resizeTimer = setTimeout(() => { if (state.pdfDoc) { redraw(); updateSelBar(); } }, 150);
   });
 }
 
@@ -668,9 +741,16 @@ tools = installTools({
   editor: el.editor,
   redraw,
   onChange: markDirty,
-  onSelect: () => syncTextControls(),
+  onSelect: () => { syncTextControls(); updateSelBar(); },
   toast,
 });
+
+installSelBar({
+  redraw,
+  onChange: markDirty,
+  onDelete: () => { if (tools?.deleteSelected()) { updateSelBar(); toast('已刪除。'); } },
+});
 syncTextControls();
+updateSelBar();
 
 console.info(`PDF Editor ready · pdf.js ${PdfJsVersion}`);

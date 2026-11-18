@@ -5,7 +5,8 @@
 
 import { state, nextId, commit, findAnnot, removeAnnot } from './state.js';
 import { screenToPdf, screenBoxToPdf } from './viewer.js';
-import { hitTest, moveAnnot, textMetrics, cssFont, CANVAS_FONTS } from './overlay.js';
+import { hitTest, moveAnnot, textMetrics, cssFont, CANVAS_FONTS, annotScreenBox } from './overlay.js';
+import { snapBox } from './guides.js';
 import { LINE_HEIGHT } from './geom.js';
 
 /** Ramer–Douglas–Peucker: keeps strokes smooth without thousands of points. */
@@ -95,7 +96,15 @@ export function installTools(deps) {
         if (!drag.moved) { commit(); drag.moved = true; }  // one history entry per drag
         moveAnnot(a, sx - drag.last[0], sy - drag.last[1]);
         drag.last = [sx, sy];
-        redraw();
+
+        // Nudge onto a guide if one is within reach. Holding Alt bypasses it.
+        let snap = null;
+        if (!ev.altKey) {
+          const s = snapBox(annotScreenBox(a), state.viewport);
+          if (s.dx || s.dy) moveAnnot(a, s.dx, s.dy);
+          if (s.hitX != null || s.hitY != null) snap = s;
+        }
+        redraw(null, snap);
       }
       return;
     }
@@ -113,7 +122,7 @@ export function installTools(deps) {
     if (!drag) return;
     const d = drag; drag = null;
 
-    if (d.kind === 'move') { deps.onChange?.(); redraw(); return; }
+    if (d.kind === 'move') { deps.onChange?.(); deps.onSelect?.(findAnnot(d.id)); redraw(); return; }
 
     const made = previewOf(d, true);
     if (made) {
@@ -121,6 +130,7 @@ export function installTools(deps) {
       state.annots.push(made);
       state.selectedId = made.id;
       deps.onChange?.();
+      deps.onSelect?.(made);
     }
     redraw();
   };
@@ -285,6 +295,7 @@ export function installTools(deps) {
       state.annots.push(...added);
       state.selectedId = added[added.length - 1].id;
       deps.onChange?.();
+      deps.onSelect?.(findAnnot(state.selectedId));
     }
     redraw();
   }

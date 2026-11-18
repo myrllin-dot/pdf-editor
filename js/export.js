@@ -199,6 +199,7 @@ export async function buildPdf(originalBytes, annots, opts = {}) {
         case 'whiteout':
           page.drawRectangle({
             x: a.x, y: a.y, width: a.w, height: a.h, color: hexRgb(a.color),
+            opacity: a.opacity ?? 1,
           });
           break;
 
@@ -206,7 +207,7 @@ export async function buildPdf(originalBytes, annots, opts = {}) {
           page.drawRectangle({
             x: a.x, y: a.y, width: a.w, height: a.h,
             color: hexRgb(a.color),
-            opacity: a.alpha ?? 0.35,
+            opacity: (a.alpha ?? 0.35) * (a.opacity ?? 1),
             blendMode: BlendMode.Multiply,
           });
           break;
@@ -214,8 +215,8 @@ export async function buildPdf(originalBytes, annots, opts = {}) {
         case 'rect':
           page.drawRectangle({
             x: a.x, y: a.y, width: a.w, height: a.h,
-            ...(a.fill ? { color: hexRgb(a.fill), opacity: a.fillAlpha ?? 1 } : {}),
-            ...(a.width ? { borderColor: hexRgb(a.color), borderWidth: a.width } : {}),
+            ...(a.fill ? { color: hexRgb(a.fill), opacity: (a.fillAlpha ?? 1) * (a.opacity ?? 1) } : {}),
+            ...(a.width ? { borderColor: hexRgb(a.color), borderWidth: a.width, borderOpacity: a.opacity ?? 1 } : {}),
           });
           break;
 
@@ -224,8 +225,8 @@ export async function buildPdf(originalBytes, annots, opts = {}) {
           page.drawEllipse({
             x: a.x + a.w / 2, y: a.y + a.h / 2,
             xScale: a.w / 2, yScale: a.h / 2,
-            ...(a.fill ? { color: hexRgb(a.fill), opacity: a.fillAlpha ?? 1 } : {}),
-            ...(a.width ? { borderColor: hexRgb(a.color), borderWidth: a.width } : {}),
+            ...(a.fill ? { color: hexRgb(a.fill), opacity: (a.fillAlpha ?? 1) * (a.opacity ?? 1) } : {}),
+            ...(a.width ? { borderColor: hexRgb(a.color), borderWidth: a.width, borderOpacity: a.opacity ?? 1 } : {}),
           });
           break;
 
@@ -235,6 +236,7 @@ export async function buildPdf(originalBytes, annots, opts = {}) {
             end: { x: a.x2, y: a.y2 },
             thickness: a.width,
             color: hexRgb(a.color),
+            opacity: a.opacity ?? 1,
             lineCap: 1,
           });
           break;
@@ -249,6 +251,7 @@ export async function buildPdf(originalBytes, annots, opts = {}) {
               end: { x: pts[i][0], y: pts[i][1] },
               thickness: a.width,
               color: col,
+              opacity: a.opacity ?? 1,
               lineCap: 1, // round
             });
           }
@@ -266,6 +269,7 @@ export async function buildPdf(originalBytes, annots, opts = {}) {
             end: { x: a.x2 - Math.cos(ang) * back, y: a.y2 - Math.sin(ang) * back },
             thickness: a.width,
             color: col,
+            opacity: a.opacity ?? 1,
             lineCap: 1,
           });
 
@@ -276,7 +280,7 @@ export async function buildPdf(originalBytes, annots, opts = {}) {
           const c2 = [-Math.cos(ang + spread) * head, Math.sin(ang + spread) * head];
           page.drawSvgPath(
             `M 0 0 L ${c1[0].toFixed(3)} ${c1[1].toFixed(3)} L ${c2[0].toFixed(3)} ${c2[1].toFixed(3)} Z`,
-            { x: a.x2, y: a.y2, color: col, borderWidth: 0 },
+            { x: a.x2, y: a.y2, color: col, opacity: a.opacity ?? 1, borderWidth: 0 },
           );
           break;
         }
