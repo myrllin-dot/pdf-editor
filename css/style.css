@@ -2,7 +2,7 @@
   --bg:#13151a; --panel:#1c1f27; --panel-2:#23262f; --line:#2e323d;
   --fg:#e7e9ee; --fg-dim:#9aa1ae; --accent:#6aa3ff; --accent-2:#2b6fd4;
   --danger:#ef5350; --stage:#30343d;
-  --topbar-h:52px; --toolbar-w:64px; --options-w:216px;
+  --topbar-h:52px; --toolbar-w:64px; --options-w:216px; --thumbs-w:138px;
 }
 *{box-sizing:border-box}
 /* Class/id display rules below would otherwise beat the UA sheet's [hidden]
@@ -78,7 +78,41 @@ select,input[type=text],input[type=number]{
 }
 .chk{display:flex; align-items:center; gap:6px; margin-top:8px; font-size:12.5px; color:var(--fg-dim); text-transform:none; letter-spacing:0; cursor:pointer}
 .chk input{accent-color:var(--accent)}
+.opt-row > label.sub{margin-top:10px; font-size:11px; text-transform:none; letter-spacing:0}
+.modal-note{
+  font-size:12.5px; line-height:1.65; color:var(--fg-dim); background:var(--panel-2);
+  border:1px solid var(--line); border-left:3px solid var(--accent);
+  border-radius:6px; padding:10px 12px; margin:0 0 16px;
+}
+.modal-note strong{color:var(--fg)}
 .hint{font-size:11.5px; color:var(--fg-dim); line-height:1.5; border-top:1px solid var(--line); padding-top:10px}
+
+/* ---------- thumbnail rail ---------- */
+#thumbs{
+  flex:0 0 var(--thumbs-w); background:var(--panel); border-right:1px solid var(--line);
+  overflow-y:auto; overflow-x:hidden; padding:10px 0 24px;
+  display:flex; flex-direction:column; align-items:center; gap:10px;
+  scrollbar-width:thin;
+}
+.thumb{
+  appearance:none; background:transparent; border:0; padding:0; cursor:pointer;
+  position:relative; display:flex; flex-direction:column; align-items:center; gap:4px;
+  width:100%;
+}
+.thumb-canvas{
+  display:block; background:#fff; border:1px solid var(--line); border-radius:3px;
+  box-shadow:0 1px 4px rgba(0,0,0,.35); transition:border-color .12s, box-shadow .12s;
+  min-width:40px; min-height:30px;
+}
+.thumb:hover .thumb-canvas{border-color:#4a5262}
+.thumb.active .thumb-canvas{border-color:var(--accent); box-shadow:0 0 0 2px rgba(106,163,255,.35)}
+.thumb-label{font-size:11px; color:var(--fg-dim); font-variant-numeric:tabular-nums}
+.thumb.active .thumb-label{color:var(--accent); font-weight:600}
+.thumb.has-marks .thumb-label::after{
+  content:''; display:inline-block; width:5px; height:5px; border-radius:50%;
+  background:var(--accent); margin-left:5px; vertical-align:middle;
+}
+.thumb-failed .thumb-canvas{background:#2a2d36}
 
 /* ---------- stage ---------- */
 #stage{flex:1 1 auto; background:var(--stage); overflow:auto; position:relative; -webkit-overflow-scrolling:touch}
@@ -133,9 +167,13 @@ select,input[type=text],input[type=number]{
 @keyframes spin{to{transform:rotate(360deg)}}
 
 /* ---------- narrow screens / iPad portrait ---------- */
+@media (max-width:1100px){
+  :root{--thumbs-w:112px}
+}
 @media (max-width:860px){
   :root{--options-w:180px; --toolbar-w:56px}
   .brand{display:none}
+  #thumbs{display:none}
 }
 @media (max-width:660px){
   #options{display:none}

@@ -24,6 +24,7 @@
   </div>
 
   <div class="group">
+    <button id="btn-thumbs" class="btn icon" title="頁面縮圖 (F)" disabled>&#9638;</button>
     <button id="btn-prev" class="btn icon" title="上一頁" disabled>&#8249;</button>
     <span id="page-label" class="readout">— / —</span>
     <button id="btn-next" class="btn icon" title="下一頁" disabled>&#8250;</button>
@@ -37,6 +38,7 @@
   </div>
 
   <div class="group right">
+    <button id="btn-ocr" class="btn" disabled title="辨識掃描頁面上的文字">文字辨識…</button>
     <button id="btn-stamps" class="btn" disabled>批次標記…</button>
   </div>
 </header>
@@ -49,6 +51,9 @@
     <button class="tool" data-tool="textbox" title="插入文字 (T)"><span>T</span><em>加字</em></button>
     <button class="tool" data-tool="pen" title="手繪 (P)"><span>&#9998;</span><em>手繪</em></button>
     <button class="tool" data-tool="arrow" title="箭頭 (A)"><span>&#8599;</span><em>箭頭</em></button>
+    <button class="tool" data-tool="line" title="直線 (L)"><span>&#9585;</span><em>直線</em></button>
+    <button class="tool" data-tool="rect" title="矩形 (R)"><span>&#9633;</span><em>矩形</em></button>
+    <button class="tool" data-tool="ellipse" title="橢圓 (O)"><span>&#9711;</span><em>橢圓</em></button>
     <button class="tool" data-tool="highlight" title="螢光筆 (H)"><span>&#9644;</span><em>螢光</em></button>
     <div class="spacer"></div>
     <button class="tool danger" id="btn-delete" title="刪除選取 (Del)"><span>&#128465;</span><em>刪除</em></button>
@@ -61,9 +66,17 @@
       <input type="color" id="color-custom" value="#d81b60" title="自訂顏色">
     </div>
 
-    <div class="opt-row" data-for="pen arrow">
+    <div class="opt-row" data-for="pen arrow line rect ellipse">
       <label>粗細 <output id="width-out">2</output></label>
-      <input type="range" id="width-range" min="0.5" max="12" step="0.5" value="2">
+      <input type="range" id="width-range" min="0" max="12" step="0.5" value="2">
+    </div>
+
+    <div class="opt-row" data-for="rect ellipse">
+      <label>填滿</label>
+      <label class="chk"><input type="checkbox" id="fill-on"> 填滿內部</label>
+      <input type="color" id="fill-color" value="#ffeb3b" title="填滿顏色">
+      <label class="sub">透明度 <output id="fill-alpha-out">100%</output></label>
+      <input type="range" id="fill-alpha" min="10" max="100" step="5" value="100">
     </div>
 
     <div class="opt-row" data-for="textbox textedit">
@@ -90,6 +103,8 @@
     <div class="hint" id="tool-hint"></div>
   </aside>
 
+  <aside id="thumbs" aria-label="頁面縮圖" hidden></aside>
+
   <main id="stage">
     <div id="dropzone">
       <div class="dz-inner">
@@ -106,6 +121,39 @@
       </div>
     </div>
   </main>
+</div>
+
+<!-- 文字辨識 OCR -->
+<div id="ocr-modal" class="modal" hidden>
+  <div class="modal-card">
+    <h3>文字辨識（OCR）</h3>
+    <p class="modal-note">
+      掃描的 PDF 只有圖片、沒有文字。辨識後「改字」才有東西可以點。
+      辨識結果<strong>一定會有錯</strong>，它的用途是把文字和位置先填好讓你修改，不是正確的謄寫。
+    </p>
+
+    <div class="field"><label>語言</label>
+      <select id="ocr-lang">
+        <option value="chi_tra">繁體中文（含文件中的英文）</option>
+        <option value="eng">只有英文</option>
+        <option value="chi_tra+eng">中英混合</option>
+      </select>
+      <small id="ocr-lang-note">中文文件請用這個。同時載入英文會明顯拉低中文辨識率。</small>
+    </div>
+
+    <div class="field"><label>範圍</label>
+      <select id="ocr-scope">
+        <option value="page">只有這一頁</option>
+        <option value="all">全部頁面</option>
+      </select>
+      <small>第一次執行要下載約 6 MB 的辨識引擎，之後由瀏覽器快取。每頁約需 1–5 秒。</small>
+    </div>
+
+    <div class="modal-actions">
+      <button class="btn" id="ocr-cancel">取消</button>
+      <button class="btn primary" id="ocr-run">開始辨識</button>
+    </div>
+  </div>
 </div>
 
 <!-- 批次標記 -->
@@ -140,8 +188,7 @@
       </div>
       <div class="field two"><label>字級</label><input type="number" id="ft-size" value="8" min="4" max="48">
         <label>位置</label>
-        <select id="ft-pos"><option value="bc">下方居中</option><option value="bl">左下</option><option value="br">右下</option></select>
-      </div>
+        <select id="ft-pos"><option value="bc">下方居中</option><option value="bl">左下</option><option value="br">右下</option></select></div>
     </section>
 
     <section class="tabpane" data-pane="watermark" hidden>

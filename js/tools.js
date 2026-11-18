@@ -70,7 +70,10 @@ export function installTools(deps) {
         break;
       case 'arrow':
       case 'highlight':
-        drag = { kind: state.tool, from: [sx, sy], to: [sx, sy] };
+      case 'rect':
+      case 'ellipse':
+      case 'line':
+        drag = { kind: state.tool, from: [sx, sy], to: [sx, sy], shift: ev.shiftKey };
         break;
       case 'textbox':
         startEdit({ screen: [sx, sy] });
@@ -101,6 +104,7 @@ export function installTools(deps) {
       return;
     }
     drag.to = [sx, sy];
+    drag.shift = ev.shiftKey;
     redraw(previewOf(drag));
   });
 
@@ -139,6 +143,42 @@ export function installTools(deps) {
       if (final && Math.hypot(x2 - x1, y2 - y1) < 4) return null;
       return {
         id: nextId(), type: 'arrow', page: state.pageNum,
+        x1, y1, x2, y2, color: state.color, width: state.lineWidth,
+      };
+    }
+    if (d.kind === 'rect' || d.kind === 'ellipse') {
+      let [tx, ty] = d.to;
+      if (d.shift) {                       // shift constrains to a square / circle
+        const side = Math.max(Math.abs(tx - d.from[0]), Math.abs(ty - d.from[1]));
+        tx = d.from[0] + Math.sign(tx - d.from[0] || 1) * side;
+        ty = d.from[1] + Math.sign(ty - d.from[1] || 1) * side;
+      }
+      const box = screenBoxToPdf({
+        x: Math.min(d.from[0], tx), y: Math.min(d.from[1], ty),
+        w: Math.abs(tx - d.from[0]), h: Math.abs(ty - d.from[1]),
+      });
+      if (final && (box.w < 2 || box.h < 2)) return null;
+      return {
+        id: nextId(), type: d.kind, page: state.pageNum, ...box,
+        color: state.color, width: state.lineWidth,
+        fill: state.shapeFill ? state.fillColor : null,
+        fillAlpha: state.fillAlpha ?? 1,
+      };
+    }
+    if (d.kind === 'line') {
+      let [tx, ty] = d.to;
+      if (d.shift) {                       // snap to 0 / 45 / 90 degrees
+        const dx = tx - d.from[0], dy = ty - d.from[1];
+        const ang = Math.round(Math.atan2(dy, dx) / (Math.PI / 4)) * (Math.PI / 4);
+        const len = Math.hypot(dx, dy);
+        tx = d.from[0] + Math.cos(ang) * len;
+        ty = d.from[1] + Math.sin(ang) * len;
+      }
+      const [x1, y1] = screenToPdf(d.from);
+      const [x2, y2] = screenToPdf([tx, ty]);
+      if (final && Math.hypot(x2 - x1, y2 - y1) < 3) return null;
+      return {
+        id: nextId(), type: 'line', page: state.pageNum,
         x1, y1, x2, y2, color: state.color, width: state.lineWidth,
       };
     }
@@ -269,7 +309,10 @@ export function installTools(deps) {
     });
 
     if (!item) {
-      deps.toast?.('這裡沒有可編輯的文字 — 掃描的 PDF 需要先做 OCR，可改用「加字」工具覆蓋。');
+      const scanned = !state.textItems.length;
+      deps.toast?.(scanned
+        ? '這一頁沒有文字圖層（應該是掃描的）。按右上角「文字辨識…」跑 OCR，之後就能點選修改。'
+        : '這個位置沒有文字。請直接點在字上面。');
       return;
     }
 

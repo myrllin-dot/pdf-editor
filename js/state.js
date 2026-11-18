@@ -21,7 +21,8 @@ export const state = {
   pageNum: 1,
   scale: 1,
   viewport: null,          // pdf.js viewport for the current page+scale
-  textItems: [],           // cached text runs for the current page (textedit)
+  textItems: [],           // text runs for the current page (native layer + OCR)
+  ocrPages: {},            // pageNum -> OCR'd items, cached for the session
 
   // tools
   tool: 'select',
@@ -31,6 +32,9 @@ export const state = {
   fontKey: 'sans',
   bold: false,
   highlightAlpha: 0.35,
+  shapeFill: false,
+  fillColor: '#ffeb3b',
+  fillAlpha: 1,
 
   // content
   annots: [],              // flat list; each has .page

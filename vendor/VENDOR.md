@@ -12,6 +12,9 @@ host with no build step and no CDN, and keep working offline.
 | `pdf-lib/pdf-lib.esm.min.js` | `pdf-lib` | 1.17.1 | writes the edited PDF |
 | `fontkit/fontkit.bundle.js` | `fontkit` | 3.0.0 | **bundled**, see below |
 | `fonts/NotoSansTC_400Regular.ttf` | `@expo-google-fonts/noto-sans-tc` | 0.4.4 | lazy-loaded, subset-embedded for Chinese text |
+| `tesseract/tesseract.esm.min.js`, `worker.min.js` | `tesseract.js` | 7.0.0 | OCR for scanned pages |
+| `tesseract/core/*.wasm.js` | `tesseract.js-core` | 7.0.0 | **must match tesseract.js's major**, see below |
+| `tesseract/lang/*.traineddata.gz` | `@tesseract.js-data/{eng,chi_tra}` | 1.0.0 | `4.0.0_best_int` models |
 
 ## Why fontkit 3 and not `@pdf-lib/fontkit`
 
@@ -47,6 +50,27 @@ This combination is smaller than the broken one it replaced (380 KB, versus
 
 `test/export.test.mjs` renders a PDF containing every annotation type and
 asserts the glyphs actually make it in, so a regression here fails loudly.
+
+## Tesseract: two things that will bite
+
+**The core version must track tesseract.js.** `tesseract.js@7` asks its worker
+for `tesseract-core-relaxedsimd-lstm.wasm.js`, a file that does not exist in
+`tesseract.js-core@6`. Pairing them gives an opaque `importScripts` failure
+rather than a version error. All three LSTM variants
+(`relaxedsimd`, `simd`, plain) are committed because the worker picks one at
+runtime from CPU feature detection, and a variant that is missing 404s instead
+of falling back. Only one is ever downloaded by a given browser. The `.wasm.js`
+files embed their wasm as base64, so no separate `.wasm` is needed.
+
+**The small language models are the right ones.** `@tesseract.js-data` ships
+both `4.0.0` (26 MB for `chi_tra`) and `4.0.0_best_int` (1.6 MB). On a Chinese
+test scan the two produced *character-for-character identical* output, so the
+16× larger file buys nothing and the quantised model is committed. If accuracy
+ever needs re-examining, re-run that comparison rather than assuming bigger is
+better.
+
+Also note `tesseract.esm.min.js` exposes its API on a single **default** export
+(`createWorker` et al. hang off `.default`), not as named exports.
 
 ## Why `.js` and not `.mjs`
 

@@ -123,6 +123,34 @@ export async function buildPdf(originalBytes, annots, opts = {}) {
           });
           break;
 
+        case 'rect':
+          page.drawRectangle({
+            x: a.x, y: a.y, width: a.w, height: a.h,
+            ...(a.fill ? { color: hexRgb(a.fill), opacity: a.fillAlpha ?? 1 } : {}),
+            ...(a.width ? { borderColor: hexRgb(a.color), borderWidth: a.width } : {}),
+          });
+          break;
+
+        case 'ellipse':
+          // pdf-lib takes a centre plus radii, we store a bounding box.
+          page.drawEllipse({
+            x: a.x + a.w / 2, y: a.y + a.h / 2,
+            xScale: a.w / 2, yScale: a.h / 2,
+            ...(a.fill ? { color: hexRgb(a.fill), opacity: a.fillAlpha ?? 1 } : {}),
+            ...(a.width ? { borderColor: hexRgb(a.color), borderWidth: a.width } : {}),
+          });
+          break;
+
+        case 'line':
+          page.drawLine({
+            start: { x: a.x1, y: a.y1 },
+            end: { x: a.x2, y: a.y2 },
+            thickness: a.width,
+            color: hexRgb(a.color),
+            lineCap: 1,
+          });
+          break;
+
         case 'ink': {
           const pts = a.points;
           if (pts.length < 2) break;

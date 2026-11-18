@@ -64,8 +64,24 @@ export async function renderPage(canvas, pageNum, scale) {
   }).promise;
 
   state.viewport = viewport;
-  state.textItems = await extractTextItems(page, viewport);
+  state.nativeTextItems = await extractTextItems(page, viewport);
+  refreshTextItems(viewport);
   return viewport;
+}
+
+/**
+ * Rebuilds `state.textItems` for the current page from the two possible
+ * sources — the PDF's own text layer and anything OCR has recognised — and
+ * re-projects every box into the current viewport, so zooming stays accurate.
+ * OCR items come last, meaning a real text run wins a tie on hit-testing.
+ */
+export function refreshTextItems(viewport = state.viewport) {
+  const native = state.nativeTextItems || [];
+  const ocr = state.ocrPages?.[state.pageNum] || [];
+  const all = [...native, ...ocr];
+  for (const it of all) it.screen = pdfBoxToScreen(it.pdf, viewport);
+  state.textItems = all;
+  return all;
 }
 
 /**

@@ -35,3 +35,17 @@ node e2e.test.mjs               # drives every tool, saves, captures the downloa
 pen, arrow, highlighter, a text box and a batch footer, then exports and leaves
 the result in `out/dl/`. Open that PDF and compare it with `out/ui-3-annotated.png` —
 they should match.
+
+## OCR tests
+
+```bash
+node mkscan.mjs          # builds out/scanned.pdf: an image-only page, no text layer
+node ocr.test.mjs        # recognises it, prints lines + boxes + confidence
+node ocr-lang.mjs        # compares chi_tra / eng+chi_tra / chi_tra+eng accuracy
+node ocr-edit.test.mjs   # the real flow: OCR -> click a line -> correct it -> export
+node v2.test.mjs         # shapes + thumbnail rail
+```
+
+`ocr-lang.mjs` is the one to re-run if anyone proposes changing the default
+language handling — it is the evidence that mixing languages wrecks Chinese
+accuracy. `mkscan.mjs` needs Pillow (`pip install pillow`) to draw the fixture.

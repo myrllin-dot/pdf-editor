@@ -41,16 +41,25 @@ export function drawOverlay(canvas, viewport, { preview = null } = {}) {
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   ctx.clearRect(0, 0, viewport.width, viewport.height);
 
+  drawOverlayTo(ctx, viewport, state.pageNum, { preview, showSelection: true });
+}
+
+/**
+ * Draws one page's annotations into an arbitrary 2D context. The main canvas
+ * and the thumbnail rail both go through here, which is why a mark always
+ * looks the same in the rail as it does full size.
+ */
+export function drawOverlayTo(ctx, viewport, pageNum, { preview = null, showSelection = false } = {}) {
   for (const a of state.annots) {
-    if (a.page !== state.pageNum) continue;
+    if (a.page !== pageNum) continue;
     drawAnnot(ctx, a, viewport);
   }
 
   if (preview) drawAnnot(ctx, preview, viewport, true);
 
-  if (state.selectedId) {
+  if (showSelection && state.selectedId) {
     const sel = findAnnot(state.selectedId);
-    if (sel && sel.page === state.pageNum) drawSelection(ctx, sel, viewport);
+    if (sel && sel.page === pageNum) drawSelection(ctx, sel, viewport);
   }
 }
 
@@ -70,6 +79,38 @@ function drawAnnot(ctx, a, viewport, isPreview = false) {
       ctx.globalCompositeOperation = 'multiply';
       ctx.fillStyle = rgba(a.color, a.alpha ?? 0.35);
       ctx.fillRect(r.x, r.y, r.w, r.h);
+      break;
+    }
+    case 'rect':
+    case 'ellipse': {
+      const r = pdfBoxToScreen(a, viewport);
+      const lw = Math.max((a.width || 0) * viewport.scale, a.width ? 0.75 : 0);
+      ctx.lineWidth = lw;
+      ctx.strokeStyle = rgba(a.color, 1);
+      if (a.fill) ctx.fillStyle = rgba(a.fill, a.fillAlpha ?? 1);
+
+      ctx.beginPath();
+      if (a.type === 'rect') {
+        ctx.rect(r.x + lw / 2, r.y + lw / 2, Math.max(r.w - lw, 0), Math.max(r.h - lw, 0));
+      } else {
+        ctx.ellipse(r.x + r.w / 2, r.y + r.h / 2,
+                    Math.max(r.w / 2 - lw / 2, 0), Math.max(r.h / 2 - lw / 2, 0),
+                    0, 0, Math.PI * 2);
+      }
+      if (a.fill) ctx.fill();
+      if (lw > 0) ctx.stroke();
+      break;
+    }
+    case 'line': {
+      const [x1, y1] = pdfToScreen([a.x1, a.y1], viewport);
+      const [x2, y2] = pdfToScreen([a.x2, a.y2], viewport);
+      ctx.strokeStyle = rgba(a.color, 1);
+      ctx.lineWidth = Math.max(a.width * viewport.scale, 0.75);
+      ctx.lineCap = 'round';
+      ctx.beginPath();
+      ctx.moveTo(x1, y1);
+      ctx.lineTo(x2, y2);
+      ctx.stroke();
       break;
     }
     case 'ink': {
@@ -172,8 +213,55 @@ export function screenBBox(a, viewport = state.viewport) {
   switch (a.type) {
     case 'whiteout':
     case 'highlight':
-      return pdfBoxToScreen(a, viewport);
+    case 'rect':
+    case 'ellipse': {
+      const b = pdfBoxToScreen(a, viewport);
+      const pad = ((a.width || 0) * viewport.scale) / 2;
+      return { x: b.x - pad, y: b.y - pad, w: b.w + pad * 2, h: b.h + pad * 2 };
+    }
 
+    case 'line': {
+      const [x1, y1] = pdfToScreen([a.x1, a.y1], viewport);
+      const [x2, y2] = pdfToScreen([a.x2, a.y2], viewport);
+      const pad = Math.max(a.width * viewport.scale, 4);
+      return {
+        x: Math.min(x1, x2) - pad, y: Math.min(y1, y2) - pad,
+        w: Math.abs(x2 - x1) + pad * 2, h: Math.abs(y2 - y1) + pad * 2,
+      };
+    }
+
+    case 'rect':
+    case 'ellipse': {
+      const r = pdfBoxToScreen(a, viewport);
+      const lw = Math.max((a.width || 0) * viewport.scale, a.width ? 0.75 : 0);
+      ctx.lineWidth = lw;
+      ctx.strokeStyle = rgba(a.color, 1);
+      if (a.fill) ctx.fillStyle = rgba(a.fill, a.fillAlpha ?? 1);
+
+      ctx.beginPath();
+      if (a.type === 'rect') {
+        ctx.rect(r.x + lw / 2, r.y + lw / 2, Math.max(r.w - lw, 0), Math.max(r.h - lw, 0));
+      } else {
+        ctx.ellipse(r.x + r.w / 2, r.y + r.h / 2,
+                    Math.max(r.w / 2 - lw / 2, 0), Math.max(r.h / 2 - lw / 2, 0),
+                    0, 0, Math.PI * 2);
+      }
+      if (a.fill) ctx.fill();
+      if (lw > 0) ctx.stroke();
+      break;
+    }
+    case 'line': {
+      const [x1, y1] = pdfToScreen([a.x1, a.y1], viewport);
+      const [x2, y2] = pdfToScreen([a.x2, a.y2], viewport);
+      ctx.strokeStyle = rgba(a.color, 1);
+      ctx.lineWidth = Math.max(a.width * viewport.scale, 0.75);
+      ctx.lineCap = 'round';
+      ctx.beginPath();
+      ctx.moveTo(x1, y1);
+      ctx.lineTo(x2, y2);
+      ctx.stroke();
+      break;
+    }
     case 'ink': {
       if (!a.points.length) return null;
       const pts = a.points.map(p => pdfToScreen(p, viewport));
@@ -220,13 +308,38 @@ export function hitTest(x, y, viewport = state.viewport) {
     const a = onPage[i];
     if (a.type === 'ink') {
       if (nearPolyline(a, x, y, viewport)) return a;
-    } else if (a.type === 'arrow') {
-      if (nearSegment(a, x, y, viewport)) return a;
+    } else if (a.type === 'arrow' || a.type === 'line') {
+      const seg = a.type === 'line'
+        ? { x1: a.x1, y1: a.y1, x2: a.x2, y2: a.y2, width: a.width }
+        : a;
+      if (nearSegment(seg, x, y, viewport)) return a;
+    } else if ((a.type === 'rect' || a.type === 'ellipse') && !a.fill) {
+      // Hollow shape: only the stroke is clickable, so you can still reach
+      // whatever sits inside it.
+      if (nearOutline(a, x, y, viewport)) return a;
     } else if (inBox(screenBBox(a, viewport), x, y, 2)) {
       return a;
     }
   }
   return null;
+}
+
+/** True near the border of an unfilled rect/ellipse, false well inside it. */
+function nearOutline(a, x, y, viewport) {
+  const tol = Math.max((a.width || 1) * viewport.scale, 5);
+  const b = pdfBoxToScreen(a, viewport);
+  if (!inBox(b, x, y, tol)) return false;
+
+  if (a.type === 'rect') {
+    const inner = { x: b.x + tol, y: b.y + tol, w: b.w - tol * 2, h: b.h - tol * 2 };
+    return !(inner.w > 0 && inner.h > 0 && inBox(inner, x, y, 0));
+  }
+  const rx = b.w / 2, ry = b.h / 2;
+  if (rx <= 0 || ry <= 0) return false;
+  const nx = (x - (b.x + rx)) / rx, ny = (y - (b.y + ry)) / ry;
+  const d = Math.hypot(nx, ny);                     // 1 == on the ellipse
+  const band = tol / Math.min(rx, ry);
+  return Math.abs(d - 1) <= band;
 }
 
 function nearPolyline(a, x, y, viewport) {
@@ -263,7 +376,11 @@ export function moveAnnot(a, dxScreen, dyScreen, viewport = state.viewport) {
   switch (a.type) {
     case 'whiteout':
     case 'highlight':
+    case 'rect':
+    case 'ellipse':
       a.x += dx; a.y += dy; break;
+    case 'line':
+      a.x1 += dx; a.y1 += dy; a.x2 += dx; a.y2 += dy; break;
     case 'text':
       a.x += dx; a.y += dy; break;
     case 'ink':

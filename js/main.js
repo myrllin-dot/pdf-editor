@@ -7,6 +7,9 @@ import { openPdf, renderPage, PdfJsVersion } from './viewer.js';
 import { drawOverlay } from './overlay.js';
 import { installTools } from './tools.js';
 import { applyStamp } from './stamps.js';
+import { ocrPage, meanConfidence, terminate as terminateOcr } from './ocr.js';
+import { buildThumbs, setActiveThumb, refreshThumb, destroyThumbs, thumbsReady } from './thumbs.js';
+import { refreshTextItems } from './viewer.js';
 import { buildPdf } from './export.js';
 
 const $ = id => document.getElementById(id);
@@ -17,6 +20,7 @@ const el = {
   stage: $('stage'), pageLabel: $('page-label'), zoomLabel: $('zoom-label'),
   toast: $('toast'), busy: $('busy'), busyText: $('busy-text'),
   modal: $('stamp-modal'), hint: $('tool-hint'),
+  ocrModal: $('ocr-modal'), thumbs: $('thumbs'),
 };
 
 const SWATCHES = ['#d81b60', '#1565c0', '#2e7d32', '#ef6c00', '#6a1b9a', '#000000', '#ffffff', '#ffeb3b'];
@@ -28,6 +32,9 @@ const HINTS = {
   pen: '按住拖曳即可手繪。',
   arrow: '從起點拖到終點，箭頭在終點。',
   highlight: '拖出一個矩形。使用色彩增值，底下的字看得見。',
+  line: '拖出一條直線。按住 Shift 可鎖定 45 度。',
+  rect: '拖出一個矩形。粗細設 0 就只有填滿。按住 Shift 畫正方形。',
+  ellipse: '拖出一個橢圓。按住 Shift 畫正圓。',
 };
 
 let dirty = false;
@@ -51,7 +58,8 @@ const busy = (on, text = '處理中…') => {
 };
 
 function setEnabled(on) {
-  for (const id of ['btn-save', 'btn-prev', 'btn-next', 'btn-zoom-in', 'btn-zoom-out', 'btn-zoom-fit', 'btn-stamps']) {
+  for (const id of ['btn-save', 'btn-prev', 'btn-next', 'btn-zoom-in', 'btn-zoom-out',
+                    'btn-zoom-fit', 'btn-stamps', 'btn-ocr', 'btn-thumbs']) {
     $(id).disabled = !on;
   }
 }
@@ -61,7 +69,11 @@ function refreshHistoryButtons() {
   $('btn-redo').disabled = !canRedo();
 }
 
-const markDirty = () => { dirty = true; refreshHistoryButtons(); };
+const markDirty = () => {
+  dirty = true;
+  refreshHistoryButtons();
+  if (thumbsReady()) refreshThumb(state.pageNum);
+};
 
 /* ---------------- rendering ---------------- */
 
@@ -78,6 +90,7 @@ async function showPage() {
     drawOverlay(el.overlay, vp);
     el.pageLabel.textContent = `${state.pageNum} / ${state.numPages}`;
     el.zoomLabel.textContent = `${Math.round(state.scale * 100)}%`;
+    if (thumbsReady()) setActiveThumb(state.pageNum);
   } catch (err) {
     toast(`頁面繪製失敗：${err.message}`, true);
   }
@@ -106,19 +119,86 @@ async function loadFile(file) {
     await openPdf(buf, file.name);
     state.annots = [];
     state.selectedId = null;
+    state.ocrPages = {};
+    await terminateOcr();            // a new document invalidates the warm worker
     resetHistory();
     dirty = false;
+    destroyThumbs();
     el.dropzone.hidden = true;
     el.wrap.hidden = false;
     setEnabled(true);
     refreshHistoryButtons();
     await fitWidth();
+    el.thumbs.hidden = false;
+    buildThumbs(el.thumbs, { onSelect: goToPage });
     toast(`已開啟 ${file.name}（${state.numPages} 頁）`);
   } catch (err) {
     const msg = /password/i.test(err.message || '')
       ? '這個 PDF 有密碼保護，請先解除密碼再開啟。'
       : `無法開啟：${err.message}`;
     toast(msg, true);
+  } finally {
+    busy(false);
+  }
+}
+
+function goToPage(n) {
+  if (n === state.pageNum || n < 1 || n > state.numPages) return;
+  state.pageNum = n;
+  state.selectedId = null;
+  showPage();
+}
+
+/* ---------------- OCR ---------------- */
+
+const OCR_STATUS = {
+  'loading tesseract core': '載入辨識引擎',
+  'initializing tesseract': '初始化',
+  'loading language traineddata': '載入語言資料',
+  'initializing api': '準備中',
+  'recognizing text': '辨識文字',
+};
+
+async function runOcr() {
+  const langs = $('ocr-lang').value;
+  const scope = $('ocr-scope').value;
+  const pages = scope === 'all'
+    ? Array.from({ length: state.numPages }, (_, i) => i + 1)
+    : [state.pageNum];
+
+  el.ocrModal.hidden = true;
+  busy(true, '準備辨識引擎…');
+
+  let totalLines = 0;
+  const confidences = [];
+  try {
+    for (let i = 0; i < pages.length; i++) {
+      const pn = pages[i];
+      const prefix = pages.length > 1 ? `第 ${pn} 頁 (${i + 1}/${pages.length}) · ` : '';
+      const { items } = await ocrPage(pn, {
+        langs,
+        onStatus: (status, pct) => {
+          const label = OCR_STATUS[status] || status;
+          busy(true, `${prefix}${label}${pct != null ? ` ${pct}%` : ''}`);
+        },
+      });
+      state.ocrPages[pn] = items;
+      totalLines += items.length;
+      if (items.length) confidences.push(meanConfidence(items));
+    }
+
+    refreshTextItems();
+    redraw();
+
+    if (!totalLines) {
+      toast('辨識不到文字。可能是解析度太低、頁面是空白的，或語言選錯了。', true);
+    } else {
+      const conf = Math.round(confidences.reduce((a, b) => a + b, 0) / confidences.length);
+      setTool('textedit');
+      toast(`辨識到 ${totalLines} 行文字（平均信心度 ${conf}%）。現在可以用「改字」點選修改 — 請核對內容，辨識一定有錯。`);
+    }
+  } catch (err) {
+    toast(`辨識失敗：${err.message}`, true);
   } finally {
     busy(false);
   }
@@ -304,6 +384,36 @@ function wire() {
     $('alpha-out').value = `${e.target.value}%`;
   });
 
+  $('fill-on').addEventListener('change', e => { state.shapeFill = e.target.checked; });
+  $('fill-color').addEventListener('input', e => {
+    state.fillColor = e.target.value;
+    if (!state.shapeFill) { state.shapeFill = true; $('fill-on').checked = true; }
+  });
+  $('fill-alpha').addEventListener('input', e => {
+    state.fillAlpha = parseFloat(e.target.value) / 100;
+    $('fill-alpha-out').value = `${e.target.value}%`;
+  });
+
+  $('btn-thumbs').addEventListener('click', () => {
+    el.thumbs.hidden = !el.thumbs.hidden;
+    if (!el.thumbs.hidden) {
+      if (!thumbsReady()) buildThumbs(el.thumbs, { onSelect: goToPage });
+      else setActiveThumb(state.pageNum);
+    }
+  });
+
+  $('btn-ocr').addEventListener('click', () => { el.ocrModal.hidden = false; });
+  $('ocr-cancel').addEventListener('click', () => { el.ocrModal.hidden = true; });
+  $('ocr-run').addEventListener('click', runOcr);
+  el.ocrModal.addEventListener('click', e => { if (e.target === el.ocrModal) el.ocrModal.hidden = true; });
+  $('ocr-lang').addEventListener('change', e => {
+    $('ocr-lang-note').textContent = e.target.value === 'chi_tra+eng'
+      ? '兩種語言一起辨識時，中文的正確率會明顯下降。只有真的中英夾雜才建議用。'
+      : e.target.value === 'eng'
+        ? '純英文文件用這個最準。'
+        : '中文文件請用這個。同時載入英文會明顯拉低中文辨識率。';
+  });
+
   $('btn-stamps').addEventListener('click', openStamps);
   $('stamp-cancel').addEventListener('click', () => { el.modal.hidden = true; });
   $('stamp-apply').addEventListener('click', applyStampFromForm);
@@ -327,8 +437,13 @@ function wire() {
     } else if (e.key === 'ArrowLeft') $('btn-prev').click();
     else if (e.key === 'ArrowRight') $('btn-next').click();
     else {
-      const map = { v: 'select', e: 'textedit', t: 'textbox', p: 'pen', a: 'arrow', h: 'highlight' };
-      const t = map[e.key.toLowerCase()];
+      const k = e.key.toLowerCase();
+      if (k === 'f') { e.preventDefault(); $('btn-thumbs').click(); return; }
+      const map = {
+        v: 'select', e: 'textedit', t: 'textbox', p: 'pen',
+        a: 'arrow', h: 'highlight', l: 'line', r: 'rect', o: 'ellipse',
+      };
+      const t = map[k];
       if (t) setTool(t);
     }
   });
